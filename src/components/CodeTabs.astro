@@ -1,0 +1,166 @@
+---
+import { Code } from 'astro:components';
+import { codeTheme } from '../lib/code-theme';
+
+interface Sample {
+  id: string;
+  label: string;
+  lang: string;
+  code: string;
+}
+
+interface Props {
+  samples: Sample[];
+  label: string;
+}
+
+const { samples, label } = Astro.props;
+const uid = `code-${label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+---
+<div class="code-tabs" data-code-tabs>
+  <div class="code-tabs__bar">
+    <div role="tablist" aria-label={label} class="code-tabs__list">
+      {samples.map((s, i) => (
+        <button
+          type="button"
+          role="tab"
+          id={`${uid}-tab-${s.id}`}
+          aria-controls={`${uid}-panel-${s.id}`}
+          aria-selected={i === 0 ? 'true' : 'false'}
+          tabindex={i === 0 ? 0 : -1}
+        >
+          {s.label}
+        </button>
+      ))}
+    </div>
+    <button type="button" class="code-tabs__copy" data-copy data-requires-js>
+      <span data-copy-label>Copy</span>
+    </button>
+  </div>
+  {samples.map((s, i) => (
+    <div
+      class="code-tabs__panel"
+      role="tabpanel"
+      id={`${uid}-panel-${s.id}`}
+      aria-labelledby={`${uid}-tab-${s.id}`}
+      tabindex="0"
+      hidden={i !== 0}
+      data-code={s.code}
+    >
+      <Code code={s.code} lang={s.lang as any} theme={codeTheme as any} />
+    </div>
+  ))}
+</div>
+
+<script>
+  for (const root of document.querySelectorAll<HTMLElement>('[data-code-tabs]')) {
+    const tabs = [...root.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
+    const panels = [...root.querySelectorAll<HTMLElement>('[role="tabpanel"]')];
+    const copyBtn = root.querySelector<HTMLButtonElement>('[data-copy]');
+    const copyLabel = root.querySelector<HTMLElement>('[data-copy-label]');
+
+    const select = (i: number, focus = false) => {
+      tabs.forEach((t, j) => {
+        const on = i === j;
+        t.setAttribute('aria-selected', String(on));
+        t.tabIndex = on ? 0 : -1;
+        panels[j].hidden = !on;
+      });
+      if (focus) tabs[i].focus();
+    };
+
+    tabs.forEach((tab, i) => {
+      tab.addEventListener('click', () => select(i));
+      tab.addEventListener('keydown', (e) => {
+        const last = tabs.length - 1;
+        const next = { ArrowRight: i === last ? 0 : i + 1, ArrowLeft: i === 0 ? last : i - 1, Home: 0, End: last }[e.key];
+        if (next === undefined) return;
+        e.preventDefault();
+        select(next, true);
+      });
+    });
+
+    copyBtn?.addEventListener('click', async () => {
+      const panel = panels.find((p) => !p.hidden);
+      if (!panel || !copyLabel) return;
+      try {
+        await navigator.clipboard.writeText(panel.dataset.code ?? '');
+        copyLabel.textContent = 'Copied';
+      } catch {
+        copyLabel.textContent = 'Press Ctrl+C to copy';
+        const range = document.createRange();
+        range.selectNodeContents(panel.querySelector('code') ?? panel);
+        const sel = getSelection();
+        sel?.removeAllRanges();
+        sel?.addRange(range);
+      }
+      setTimeout(() => (copyLabel.textContent = 'Copy'), 1800);
+    });
+  }
+</script>
+
+<style>
+  .code-tabs {
+    background: var(--night-raised);
+    color: var(--night-ink);
+    min-width: 0;
+  }
+
+  .code-tabs__bar {
+    display: flex;
+    align-items: stretch;
+    justify-content: space-between;
+    gap: 1rem;
+    border-bottom: 1px solid var(--night-rule);
+  }
+
+  .code-tabs__list {
+    display: flex;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .code-tabs__list button,
+  .code-tabs__copy {
+    min-height: 3rem;
+    padding: 0.5rem 1.15rem;
+    border: 0;
+    background: none;
+    color: var(--night-ink-2);
+    font-size: 0.9375rem;
+    font-weight: 500;
+    white-space: nowrap;
+    cursor: pointer;
+  }
+
+  .code-tabs__list button:hover,
+  .code-tabs__copy:hover {
+    color: var(--night-ink);
+  }
+
+  .code-tabs__list button[aria-selected='true'] {
+    color: var(--night-ink);
+    box-shadow: inset 0 -2px 0 var(--signal);
+  }
+
+  .code-tabs__list button:focus-visible,
+  .code-tabs__copy:focus-visible,
+  .code-tabs__panel:focus-visible {
+    outline-offset: -2px;
+  }
+
+  .code-tabs__panel :global(pre) {
+    margin: 0;
+    padding: 1.5rem 1.25rem 1.75rem;
+    background: transparent !important;
+    font-size: 0.875rem;
+    line-height: 1.75;
+    overflow-x: auto;
+  }
+
+  @media (min-width: 720px) {
+    .code-tabs__panel :global(pre) {
+      padding: 1.75rem 1.75rem 2rem;
+    }
+  }
+</style>

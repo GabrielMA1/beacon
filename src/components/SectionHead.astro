@@ -1,0 +1,14 @@
+---
+interface Props {
+  label: string;
+  id?: string;
+  /** Heading level for the title; defaults to h2 */
+  as?: 'h1' | 'h2';
+}
+const { label, id, as: Tag = 'h2' } = Astro.props;
+---
+<header class="grid sh">
+  <p class="sh__label label">{label}</p>
+  <Tag class:list={['sh__title', Tag === 'h1' ? 'h1' : 'h2']} id={id}><slot /></Tag>
+  {Astro.slots.has('lede') && <p class="sh__lede lede"><slot name="lede" /></p>}
+</header>

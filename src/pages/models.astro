@@ -1,0 +1,491 @@
+---
+import Base from '../layouts/Base.astro';
+import FinalCta from '../components/FinalCta.astro';
+import { getCatalog, featureLabels, tierLabels, formatRate, formatTokens, type FeatureId } from '../lib/catalog';
+
+const { models, providers } = await getCatalog();
+
+const featureOrder: FeatureId[] = ['tools', 'reasoning', 'vision', 'caching', 'json'];
+const modalityLabel = (m: string[]) => m.map((x) => x[0].toUpperCase() + x.slice(1)).join(', ');
+---
+<Base
+  title="Models"
+  description={`Compare ${models.length} AI models available through Gabnode, from ${providers
+    .slice(0, 4)
+    .map((p) => p.name)
+    .join(', ')} and more: context windows, capabilities and per-token rates.`}
+>
+  <section class="page-head">
+    <div class="wrap grid">
+      <p class="label page-head__label">Models</p>
+      <h1 class="h1 page-head__title">{models.length} models from {providers.length} providers. One&nbsp;API.</h1>
+      <p class="lede page-head__lede">
+        Compare context windows, capabilities and per-token rates. To use a model, pass its ID as
+        the <code>model</code> parameter.
+      </p>
+    </div>
+  </section>
+
+  <section class="catalog" aria-labelledby="catalog-title">
+    <div class="wrap">
+      <h2 id="catalog-title" class="visually-hidden">Model catalog</h2>
+
+      <form class="filters" data-filters data-requires-js role="search" aria-label="Filter models">
+        <label class="field filters__search">
+          <span>Search</span>
+          <input class="input" type="search" name="q" placeholder="Name or model ID" autocomplete="off" />
+        </label>
+        <label class="field">
+          <span>Provider</span>
+          <select class="select" name="provider">
+            <option value="">All providers</option>
+            {providers.map((p) => <option value={p.id}>{p.name}</option>)}
+          </select>
+        </label>
+        <label class="field">
+          <span>Sort by</span>
+          <select class="select" name="sort">
+            <option value="default">Provider</option>
+            <option value="input">Cheapest input</option>
+            <option value="output">Cheapest output</option>
+            <option value="context">Largest context</option>
+            <option value="name">Name</option>
+          </select>
+        </label>
+        <fieldset class="filters__caps">
+          <legend>Capabilities</legend>
+          <div>
+            {featureOrder.map((f) => (
+              <label class="chip">
+                <input type="checkbox" name="feature" value={f} />
+                <span>{featureLabels[f]}</span>
+              </label>
+            ))}
+          </div>
+        </fieldset>
+      </form>
+
+      <div class="catalog__status" data-requires-js>
+        <p aria-live="polite" data-count>Showing all {models.length} models</p>
+        <p class="small faint">Prices in USD per 1 million tokens</p>
+      </div>
+
+      <ol class="catalog__list" role="list" data-list>
+        {models.map((m, i) => (
+          <li
+            class="mrow"
+            id={m.id}
+            data-provider={m.provider.id}
+            data-features={m.features.join(' ')}
+            data-search={`${m.name} ${m.id} ${m.provider.name}`.toLowerCase()}
+            data-name={m.name}
+            data-input={m.pricing.input}
+            data-output={m.pricing.output}
+            data-context={m.contextWindow ?? 0}
+            data-index={i}
+          >
+            <div class="mrow__main">
+              <p class="mrow__provider">{m.provider.name}</p>
+              <h3 class="mrow__name">{m.name}</h3>
+              <p class="mrow__id">
+                <code class="model-id">{m.id}</code>
+                <button type="button" class="mrow__copy" data-copy-text={m.id} data-requires-js aria-label={`Copy model ID ${m.id}`}>
+                  Copy ID
+                </button>
+              </p>
+              {m.summary && <p class="mrow__summary">{m.summary}</p>}
+            </div>
+
+            <dl class="mrow__specs">
+              {m.tier && (
+                <div><dt>Class</dt><dd>{tierLabels[m.tier]}</dd></div>
+              )}
+              <div><dt>Context</dt><dd>{formatTokens(m.contextWindow)} tokens</dd></div>
+              <div><dt>Max output</dt><dd>{formatTokens(m.maxOutputTokens)} tokens</dd></div>
+              <div><dt>Input</dt><dd>{modalityLabel(m.inputModalities)}</dd></div>
+            </dl>
+
+            <dl class="mrow__rates">
+              <div><dt>Input</dt><dd>{formatRate(m.pricing.input)}</dd></div>
+              <div><dt>Cached input</dt><dd>{formatRate(m.pricing.cachedInput)}</dd></div>
+              <div><dt>Output</dt><dd>{formatRate(m.pricing.output)}</dd></div>
+            </dl>
+
+            <ul class="mrow__features" role="list" aria-label="Capabilities">
+              {featureOrder.filter((f) => m.features.includes(f)).map((f) => <li>{featureLabels[f]}</li>)}
+            </ul>
+          </li>
+        ))}
+      </ol>
+
+      <div class="catalog__empty" data-empty hidden>
+        <p class="h3">No models match these filters.</p>
+        <button type="button" class="btn btn--line btn--sm" data-reset>Clear filters</button>
+      </div>
+
+      <p class="catalog__note small faint">
+        Model availability and rates can change. Applications should read the current list from
+        <code>GET /v1/models</code>. Model names are trademarks of their respective owners.
+      </p>
+    </div>
+  </section>
+
+  <FinalCta />
+</Base>
+
+<script>
+  const form = document.querySelector<HTMLFormElement>('[data-filters]');
+  const list = document.querySelector<HTMLOListElement>('[data-list]');
+  const count = document.querySelector<HTMLElement>('[data-count]');
+  const empty = document.querySelector<HTMLElement>('[data-empty]');
+
+  if (form && list && count && empty) {
+    const rows = [...list.querySelectorAll<HTMLLIElement>('.mrow')];
+    const total = rows.length;
+
+    const sorters: Record<string, (a: HTMLElement, b: HTMLElement) => number> = {
+      default: (a, b) => +a.dataset.index! - +b.dataset.index!,
+      input: (a, b) => +a.dataset.input! - +b.dataset.input!,
+      output: (a, b) => +a.dataset.output! - +b.dataset.output!,
+      context: (a, b) => +b.dataset.context! - +a.dataset.context!,
+      name: (a, b) => a.dataset.name!.localeCompare(b.dataset.name!),
+    };
+
+    const apply = () => {
+      const data = new FormData(form);
+      const q = String(data.get('q') ?? '').trim().toLowerCase();
+      const provider = String(data.get('provider') ?? '');
+      const features = data.getAll('feature').map(String);
+      const sort = String(data.get('sort') ?? 'default');
+
+      let shown = 0;
+      for (const row of rows) {
+        const rowFeatures = row.dataset.features!.split(' ');
+        const match =
+          (!q || row.dataset.search!.includes(q)) &&
+          (!provider || row.dataset.provider === provider) &&
+          features.every((f) => rowFeatures.includes(f));
+        row.hidden = !match;
+        if (match) shown++;
+      }
+
+      rows.sort(sorters[sort] ?? sorters.default).forEach((r) => list.appendChild(r));
+      count.textContent = shown === total ? `Showing all ${total} models` : `Showing ${shown} of ${total} models`;
+      empty.hidden = shown !== 0;
+    };
+
+    form.addEventListener('input', apply);
+    form.addEventListener('submit', (e) => e.preventDefault());
+    empty.querySelector('[data-reset]')?.addEventListener('click', () => {
+      form.reset();
+      apply();
+    });
+  }
+
+  for (const btn of document.querySelectorAll<HTMLButtonElement>('[data-copy-text]')) {
+    btn.addEventListener('click', async () => {
+      const original = btn.textContent;
+      try {
+        await navigator.clipboard.writeText(btn.dataset.copyText ?? '');
+        btn.textContent = 'Copied';
+      } catch {
+        btn.textContent = 'Copy failed';
+      }
+      setTimeout(() => (btn.textContent = original), 1600);
+    });
+  }
+</script>
+
+<style>
+  .page-head {
+    padding-top: clamp(3rem, 1.5rem + 5vw, 6.5rem);
+    padding-bottom: clamp(2.5rem, 1.5rem + 3vw, 4.5rem);
+  }
+
+  .page-head .grid {
+    row-gap: 1.5rem;
+  }
+
+  .page-head__label,
+  .page-head__title,
+  .page-head__lede {
+    grid-column: 1 / -1;
+  }
+
+  .page-head__title {
+    max-width: 14em;
+  }
+
+  @media (min-width: 960px) {
+    .page-head__label {
+      grid-column: 1 / span 3;
+      padding-top: 0.8em;
+    }
+    .page-head__title,
+    .page-head__lede {
+      grid-column: 4 / -1;
+    }
+  }
+
+  /* Filters */
+  .filters {
+    display: grid;
+    gap: 1rem var(--col-gap);
+    padding-block: 1.5rem;
+    border-top: 1px solid var(--ink);
+  }
+
+  .filters__caps {
+    margin: 0;
+    padding: 0;
+    border: 0;
+    min-width: 0;
+  }
+
+  .filters__caps legend {
+    padding: 0;
+    margin-bottom: 0.4rem;
+    font-size: var(--fs-micro);
+    font-weight: 500;
+    color: var(--fg-2);
+  }
+
+  .filters__caps > div {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+  }
+
+  .chip {
+    position: relative;
+  }
+
+  .chip input {
+    position: absolute;
+    inset: 0;
+    margin: 0;
+    opacity: 0;
+    cursor: pointer;
+  }
+
+  .chip span {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    min-height: 2.5rem;
+    padding: 0.35rem 0.8rem;
+    border: 1px solid var(--rule);
+    background: var(--sheet);
+    font-size: 0.9375rem;
+    font-weight: 500;
+  }
+
+  .chip span::before {
+    content: '';
+    width: 0.7rem;
+    height: 0.7rem;
+    border: 1px solid var(--ink-3);
+  }
+
+  .chip:hover span {
+    border-color: var(--ink);
+  }
+
+  .chip input:checked + span {
+    border-color: var(--ink);
+  }
+
+  .chip input:checked + span::before {
+    background: var(--ink);
+    border-color: var(--ink);
+    box-shadow: inset 0 0 0 2px var(--sheet);
+  }
+
+  .chip input:focus-visible + span {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
+
+  @media (min-width: 720px) {
+    .filters {
+      grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1.4fr);
+    }
+    .filters__caps {
+      grid-column: 1 / -1;
+    }
+  }
+
+  @media (min-width: 1200px) {
+    .filters {
+      grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1.2fr) auto;
+      align-items: end;
+    }
+    .filters__caps {
+      grid-column: auto;
+    }
+  }
+
+  .catalog__status {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 0.5rem 2rem;
+    padding-block: 1rem;
+    border-top: 1px solid var(--rule);
+    font-size: var(--fs-small);
+    font-weight: 500;
+  }
+
+  /* Model rows */
+  .catalog__list {
+    border-top: 1px solid var(--ink);
+  }
+
+  .mrow {
+    display: grid;
+    gap: 1.25rem var(--col-gap);
+    padding-block: 1.75rem;
+    border-bottom: 1px solid var(--rule);
+    scroll-margin-top: calc(var(--header-h) + 1rem);
+  }
+
+  .mrow:target {
+    background: var(--sheet);
+    box-shadow: -1rem 0 0 var(--sheet), 1rem 0 0 var(--sheet), inset 3px 0 0 var(--signal);
+    padding-left: 1rem;
+  }
+
+  .mrow__main {
+    display: grid;
+    gap: 0.35rem;
+    align-content: start;
+  }
+
+  .mrow__provider {
+    font-size: var(--fs-micro);
+    color: var(--ink-3);
+  }
+
+  .mrow__name {
+    font-size: clamp(1.375rem, 1.2rem + 0.6vw, 1.75rem);
+    font-weight: 600;
+    letter-spacing: -0.025em;
+    line-height: 1.15;
+  }
+
+  .mrow__id {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.25rem 0.85rem;
+  }
+
+  .mrow__id .model-id {
+    font-size: 0.875rem;
+    color: var(--ink);
+  }
+
+  .mrow__copy {
+    padding: 0.25rem 0;
+    border: 0;
+    background: none;
+    font-size: var(--fs-micro);
+    font-weight: 500;
+    color: var(--ink-2);
+    text-decoration: underline;
+    text-decoration-color: var(--rule);
+    text-underline-offset: 0.25em;
+    cursor: pointer;
+  }
+
+  .mrow__copy:hover {
+    color: var(--ink);
+    text-decoration-color: currentColor;
+  }
+
+  .mrow__summary {
+    margin-top: 0.35rem;
+    max-width: 32em;
+    color: var(--ink-2);
+  }
+
+  .mrow__specs,
+  .mrow__rates {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.75rem 1.25rem;
+    align-content: start;
+  }
+
+  .mrow__rates {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .mrow dt {
+    font-size: var(--fs-micro);
+    color: var(--ink-3);
+  }
+
+  .mrow dd {
+    font-size: var(--fs-small);
+    font-weight: 500;
+  }
+
+  .mrow__rates dd {
+    font-size: 1.125rem;
+    font-weight: 560;
+    letter-spacing: -0.01em;
+  }
+
+  .mrow__features {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem 1rem;
+    font-size: var(--fs-micro);
+    color: var(--ink-2);
+  }
+
+  .mrow__features li::before {
+    content: '';
+    display: inline-block;
+    width: 0.4rem;
+    height: 0.4rem;
+    margin-right: 0.45rem;
+    vertical-align: 0.1em;
+    background: var(--ink);
+    border-radius: 50%;
+  }
+
+  @media (min-width: 960px) {
+    .mrow {
+      grid-template-columns: repeat(12, minmax(0, 1fr));
+    }
+    .mrow__main {
+      grid-column: 1 / span 5;
+      grid-row: span 2;
+    }
+    .mrow__specs {
+      grid-column: 6 / span 3;
+    }
+    .mrow__rates {
+      grid-column: 9 / -1;
+    }
+    .mrow__features {
+      grid-column: 6 / -1;
+      align-self: end;
+    }
+  }
+
+  .catalog__empty {
+    display: grid;
+    justify-items: start;
+    gap: 1rem;
+    padding-block: 3rem;
+  }
+
+  .catalog__note {
+    margin-top: 2rem;
+    margin-bottom: var(--section);
+    max-width: 48em;
+  }
+</style>

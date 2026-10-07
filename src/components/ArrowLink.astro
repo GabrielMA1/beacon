@@ -1,0 +1,12 @@
+---
+interface Props {
+  href: string;
+  /** Links that leave gabnode.com get a diagonal arrow */
+  external?: boolean;
+  class?: string;
+}
+const { href, external = false, class: className } = Astro.props;
+---
+<a class:list={['arrow-link', className]} href={href}>
+  <span class="arrow-link__text"><slot /></span><span class="arrow" aria-hidden="true">{external ? '↗' : '→'}</span>
+</a>

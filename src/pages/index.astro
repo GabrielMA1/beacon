@@ -1,0 +1,980 @@
+---
+import Base from '../layouts/Base.astro';
+import SectionHead from '../components/SectionHead.astro';
+import RequestReceipt from '../components/RequestReceipt.astro';
+import RateTable from '../components/RateTable.astro';
+import CodeTabs from '../components/CodeTabs.astro';
+import AccountSheet from '../components/AccountSheet.astro';
+import Faq from '../components/Faq.astro';
+import ArrowLink from '../components/ArrowLink.astro';
+import FinalCta from '../components/FinalCta.astro';
+import { getCatalog, tierLabels, formatTokens } from '../lib/catalog';
+import { links } from '../config/site';
+import { faqs } from '../data/faq';
+
+const catalog = await getCatalog();
+const { models, providers } = catalog;
+
+const pick = (ids: string[], n: number) => {
+  const found = ids.map((id) => models.find((m) => m.id === id)).filter(Boolean) as typeof models;
+  const rest = models.filter((m) => !found.includes(m));
+  return [...found, ...rest].slice(0, n);
+};
+
+const [codeModelA, codeModelB, codeModelC] = pick(['claude-sonnet-5-5', 'gpt-6.1-sol', 'gemini-3.8-flash'], 3).map((m) => m.id);
+const rateExcerpt = pick(
+  ['claude-sonnet-5-5', 'gpt-6.1-sol', 'gemini-3.8-flash', 'deepseek-v4-pro', 'kimi-k2.6', 'qwen3.8-flash'],
+  6,
+);
+
+const providerNames = providers.map((p) => p.name);
+const leadProviders = providerNames.slice(0, 4).join(', ');
+
+const comparison = [
+  ['Accounts', 'One per provider', 'One Gabnode account'],
+  ['API keys', 'Separate keys in each console', 'Gabnode keys you create, rotate and revoke in one place'],
+  ['Billing', 'A payment method and invoice per provider', 'One prepaid balance, shared by every model'],
+  ['Integration', 'Different SDKs and request formats', 'One OpenAI-compatible API'],
+  ['Changing models', 'Often new integration work', 'Change the model parameter'],
+  ['Usage', 'Spread across provider consoles', 'One usage history, itemised by request and model'],
+];
+
+const steps = [
+  { title: 'Create an account', body: 'Sign up in the Gabnode dashboard. One account covers every model we serve.' },
+  { title: 'Add balance', body: 'Top up a prepaid balance. It is shared across all models, so there is nothing to allocate.' },
+  { title: 'Create an API key', body: 'Generate a key for each application or environment. Rotate or revoke keys at any time.' },
+  { title: 'Send requests', body: 'Call the API with the model you want. Each request is charged at that model’s published rate.' },
+];
+
+const samples = [
+  {
+    id: 'curl',
+    label: 'cURL',
+    lang: 'bash',
+    code: `curl ${links.apiBase}/chat/completions \\
+  -H "Authorization: Bearer $GABNODE_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "model": "${codeModelA}",
+    "messages": [
+      {"role": "user", "content": "Summarise this changelog in three bullet points."}
+    ]
+  }'`,
+  },
+  {
+    id: 'python',
+    label: 'Python',
+    lang: 'python',
+    code: `import os
+from openai import OpenAI
+
+client = OpenAI(
+    base_url="${links.apiBase}",
+    api_key=os.environ["GABNODE_API_KEY"],
+)
+
+response = client.chat.completions.create(
+    model="${codeModelB}",
+    messages=[{"role": "user", "content": "Summarise this changelog in three bullet points."}],
+)
+
+print(response.choices[0].message.content)
+print(response.usage)  # tokens billed for this request`,
+  },
+  {
+    id: 'typescript',
+    label: 'TypeScript',
+    lang: 'ts',
+    code: `import OpenAI from "openai";
+
+const client = new OpenAI({
+  baseURL: "${links.apiBase}",
+  apiKey: process.env.GABNODE_API_KEY,
+});
+
+const stream = await client.chat.completions.create({
+  model: "${codeModelC}",
+  messages: [{ role: "user", content: "Draft release notes for version 2.4." }],
+  stream: true,
+});
+
+for await (const chunk of stream) {
+  process.stdout.write(chunk.choices[0]?.delta?.content ?? "");
+}`,
+  },
+  {
+    id: 'models',
+    label: 'List models',
+    lang: 'bash',
+    code: `curl ${links.apiBase}/models \\
+  -H "Authorization: Bearer $GABNODE_API_KEY"`,
+  },
+];
+
+const clients = [
+  { group: 'SDKs and frameworks', items: ['OpenAI Python SDK', 'OpenAI Node.js SDK', 'Vercel AI SDK', 'LangChain', 'LlamaIndex', 'LiteLLM'] },
+  { group: 'Editors and coding agents', items: ['Continue', 'Cline', 'Roo Code', 'Zed', 'Aider'] },
+  { group: 'Chat interfaces', items: ['Open WebUI', 'LibreChat', 'Jan', 'Chatbox'] },
+];
+
+const dashboardFeatures = [
+  { title: 'Balance', body: 'See your balance at any time, top up when you need to and review past purchases.' },
+  { title: 'API keys', body: 'Create keys per application or environment. Rotate or revoke them yourself, instantly.' },
+  { title: 'Usage', body: 'Requests, tokens and spend, broken down by model, so costs are never a surprise.' },
+  { title: 'Support', body: 'Open a ticket, follow its history and close it once it’s resolved.' },
+];
+
+const docTopics = [
+  'Quick start',
+  'Authentication',
+  'Chat completions',
+  'Streaming',
+  'Tool calling',
+  'Structured output',
+  'Listing models',
+  'Errors and rate limits',
+  'Usage and billing',
+];
+---
+<Base>
+  <!-- Hero -->
+  <section class="hero" aria-labelledby="hero-title">
+    <div class="wrap grid hero__grid">
+      <h1 id="hero-title" class="display hero__title">Leading models.<br />One API.</h1>
+
+      <div class="hero__copy">
+        <p class="lede hero__lede">
+          Gabnode gives your applications access to models from {leadProviders} and others through a single
+          OpenAI-compatible API. One account, one prepaid balance, and per-token rates published for every model.
+        </p>
+        <div class="actions">
+          <a class="btn" href={links.signup}>Get started</a>
+          <ArrowLink href="/models/">View models</ArrowLink>
+        </div>
+        <ul class="hero__facts small" role="list">
+          <li><strong>{models.length} models</strong> from {providers.length} providers</li>
+          <li><strong>OpenAI-compatible</strong> API</li>
+          <li><strong>Prepaid</strong>, billed per token</li>
+        </ul>
+      </div>
+
+      <div class="hero__exhibit">
+        <RequestReceipt models={models} />
+      </div>
+    </div>
+  </section>
+
+  <!-- Providers -->
+  <section class="providers" aria-labelledby="providers-title">
+    <div class="wrap providers__inner">
+      <h2 id="providers-title" class="label providers__label">Models available through Gabnode from</h2>
+      <ul class="providers__list" role="list">
+        {providerNames.map((name) => <li>{name}</li>)}
+      </ul>
+    </div>
+  </section>
+
+  <!-- Why Gabnode -->
+  <section class="section why" id="why" aria-labelledby="why-title">
+    <div class="wrap">
+      <SectionHead label="Why Gabnode" id="why-title">
+        Less to manage between your product and the models it uses.
+        <Fragment slot="lede">
+          Working with several model providers usually means several accounts, keys, invoices and request formats.
+          Gabnode puts them behind one integration.
+        </Fragment>
+      </SectionHead>
+
+      <div class="grid">
+        <table class="table compare" role="table">
+          <caption class="visually-hidden">Working with each provider directly compared with using Gabnode</caption>
+          <thead role="rowgroup">
+            <tr role="row">
+              <th role="columnheader" scope="col"><span class="visually-hidden">Aspect</span></th>
+              <th role="columnheader" scope="col">With each provider directly</th>
+              <th role="columnheader" scope="col">Through Gabnode</th>
+            </tr>
+          </thead>
+          <tbody role="rowgroup">
+            {comparison.map(([aspect, direct, gabnode]) => (
+              <tr role="row">
+                <th role="rowheader" scope="row">{aspect}</th>
+                <td role="cell" class="compare__direct" data-label="Directly">{direct}</td>
+                <td role="cell" class="compare__gn" data-label="Through Gabnode">{gabnode}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- Models -->
+  <section class="section theme-deep models" id="models" aria-labelledby="models-title">
+    <div class="wrap">
+      <SectionHead label="Models" id="models-title">
+        Models available through Gabnode.
+        <Fragment slot="lede">
+          Frontier and open-weight models from leading labs, behind one endpoint. Choose the right model for each
+          request, and change your mind without changing your integration.
+        </Fragment>
+      </SectionHead>
+
+      <div class="grid">
+        <ul class="index" role="list">
+          {providers.map((p) => (
+            <li class="index__row">
+              <h3 class="index__provider">{p.name}</h3>
+              <ul class="index__models" role="list">
+                {models.filter((m) => m.provider.id === p.id).map((m) => (
+                  <li>
+                    <a href={`/models/#${m.id}`} class="index__model">
+                      <span class="index__name">{m.name}</span>
+                      <span class="model-id">{m.id}</span>
+                    </a>
+                    <span class="index__meta">
+                      {m.tier && <span>{tierLabels[m.tier]}</span>}
+                      {m.contextWindow && <span class="num">{formatTokens(m.contextWindow)} context</span>}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </li>
+          ))}
+        </ul>
+
+        <div class="index__foot">
+          <ArrowLink href="/models/">Compare all {models.length} models</ArrowLink>
+          <p class="small faint">
+            Availability can change. Your application can always fetch the current list from <code>GET /v1/models</code>.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- How it works -->
+  <section class="section how" id="how-it-works" aria-labelledby="how-title">
+    <div class="wrap">
+      <SectionHead label="How it works" id="how-title">From sign-up to first request.</SectionHead>
+      <ol class="steps" role="list">
+        {steps.map((s, i) => (
+          <li class="steps__item">
+            <span class="steps__n" aria-hidden="true">{i + 1}</span>
+            <h3 class="h3">{s.title}</h3>
+            <p class="muted">{s.body}</p>
+          </li>
+        ))}
+      </ol>
+    </div>
+  </section>
+
+  <!-- Pricing -->
+  <section class="section pricing" id="pricing" aria-labelledby="pricing-title">
+    <div class="wrap">
+      <SectionHead label="Pricing" id="pricing-title">
+        Per-token rates, published for every model.
+        <Fragment slot="lede">
+          Each request draws down your prepaid balance at the model’s published rate. You pay for the tokens you use,
+          from a balance you control.
+        </Fragment>
+      </SectionHead>
+
+      <div class="grid pricing__grid">
+        <dl class="defs">
+          <div>
+            <dt>Input tokens</dt>
+            <dd>The text and images you send: system instructions, messages, tool definitions.</dd>
+          </div>
+          <div>
+            <dt>Cached input</dt>
+            <dd>Repeated prompt prefixes, such as long instructions or documents, served from cache at a reduced rate on models that support it.</dd>
+          </div>
+          <div>
+            <dt>Output tokens</dt>
+            <dd>Everything the model generates, including reasoning tokens on models that produce them.</dd>
+          </div>
+        </dl>
+
+        <div class="pricing__table">
+          <RateTable models={rateExcerpt} caption="Selected model rates in US dollars per million tokens" />
+          <ArrowLink href="/pricing/">Full rate card and cost estimator</ArrowLink>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Developers -->
+  <section class="section theme-night dev" id="developers" aria-labelledby="dev-title">
+    <div class="wrap">
+      <SectionHead label="Developers" id="dev-title">
+        Point an OpenAI-compatible client at Gabnode.
+        <Fragment slot="lede">
+          Use the official OpenAI SDKs or any client that lets you set a base URL. Set your Gabnode key, change the
+          base URL, choose a model.
+        </Fragment>
+      </SectionHead>
+
+      <div class="grid dev__grid">
+        <dl class="dev__facts">
+          <div>
+            <dt>Base URL</dt>
+            <dd><code>{links.apiBase}</code></dd>
+          </div>
+          <div>
+            <dt>Authentication</dt>
+            <dd>Your API key as a bearer token in the <code>Authorization</code> header.</dd>
+          </div>
+          <div>
+            <dt>Endpoints</dt>
+            <dd><code>/v1/chat/completions</code> with streaming, and <code>/v1/models</code> for the current model list.</dd>
+          </div>
+          <div>
+            <dt>Model features</dt>
+            <dd>Tool calling, structured output and image input work wherever the selected model supports them.</dd>
+          </div>
+        </dl>
+
+        <div class="dev__code">
+          <CodeTabs samples={samples} label="Code examples" />
+          <p class="small faint">Keep your key in an environment variable or secret store. Never ship it in client-side code.</p>
+        </div>
+      </div>
+
+      <!-- Supported clients -->
+      <div class="grid clients" id="clients">
+        <div class="clients__head">
+          <h2 class="h3">Works with tools you already use</h2>
+          <p class="muted small">
+            These SDKs, frameworks and applications accept a custom OpenAI-compatible endpoint. Which features are
+            available depends on the client and the model; the documentation covers setup.
+          </p>
+        </div>
+        {clients.map((c) => (
+          <div class="clients__group">
+            <h3 class="clients__title">{c.group}</h3>
+            <ul role="list">
+              {c.items.map((item) => <li>{item}</li>)}
+            </ul>
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <!-- Dashboard -->
+  <section class="section theme-deep dash" id="dashboard" aria-labelledby="dash-title">
+    <div class="wrap">
+      <SectionHead label="Dashboard" id="dash-title">
+        Your balance, keys, usage and support in one account.
+      </SectionHead>
+
+      <div class="grid dash__grid">
+        <div class="dash__copy">
+          <dl class="defs defs--compact">
+            {dashboardFeatures.map((f) => (
+              <div>
+                <dt>{f.title}</dt>
+                <dd>{f.body}</dd>
+              </div>
+            ))}
+          </dl>
+          <div class="actions">
+            <a class="btn btn--line" href={links.dashboard}>Open the dashboard</a>
+          </div>
+        </div>
+        <div class="dash__art">
+          <AccountSheet />
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Documentation -->
+  <section class="section docs" id="docs" aria-labelledby="docs-title">
+    <div class="wrap">
+      <SectionHead label="Documentation" id="docs-title">
+        Everything you need to integrate, in one place.
+      </SectionHead>
+      <div class="grid">
+        <div class="docs__body">
+          <ul class="docs__topics" role="list" aria-label="Documentation topics">
+            {docTopics.map((t) => <li>{t}</li>)}
+          </ul>
+          <a class="docs__link" href={links.docs}>
+            <span class="docs__link-label">Read the documentation</span>
+            <span class="docs__link-url">docs.gabnode.com <span class="docs__arrow" aria-hidden="true">↗</span></span>
+          </a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FAQ -->
+  <section class="section faq-section" id="faq" aria-labelledby="faq-title">
+    <div class="wrap">
+      <SectionHead label="Questions" id="faq-title">Common questions.</SectionHead>
+      <div class="grid">
+        <div class="faq-section__list">
+          <Faq items={faqs.general} />
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <FinalCta />
+</Base>
+
+<style>
+  /* Hero ----------------------------------------------------------------- */
+  .hero {
+    padding-top: clamp(3rem, 1.5rem + 6vw, 7.5rem);
+    padding-bottom: clamp(4rem, 2rem + 6vw, 8rem);
+  }
+
+  .hero__grid {
+    row-gap: clamp(2.5rem, 1.5rem + 3vw, 4rem);
+  }
+
+  .hero__title {
+    grid-column: 1 / -1;
+  }
+
+  .hero__copy {
+    grid-column: 1 / -1;
+    display: grid;
+    gap: 2rem;
+    align-content: start;
+  }
+
+  .hero__lede {
+    color: var(--ink-2);
+  }
+
+  .hero__facts {
+    display: grid;
+    gap: 0.35rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--rule);
+    color: var(--ink-2);
+  }
+
+  .hero__facts strong {
+    font-weight: 600;
+    color: var(--ink);
+  }
+
+  .hero__exhibit {
+    grid-column: 1 / -1;
+    min-width: 0;
+  }
+
+  @media (min-width: 1100px) {
+    .hero__copy {
+      grid-column: 1 / span 4;
+      padding-top: 0.5rem;
+    }
+    .hero__exhibit {
+      grid-column: 5 / -1;
+    }
+  }
+
+  @media (min-width: 760px) and (max-width: 1099px) {
+    .hero__copy {
+      grid-column: 1 / span 9;
+    }
+  }
+
+  /* Providers ------------------------------------------------------------ */
+  .providers__inner {
+    display: grid;
+    gap: 1.25rem;
+    padding-block: 2rem;
+    border-top: 1px solid var(--ink);
+  }
+
+  .providers__label {
+    color: var(--ink-2);
+    font-weight: 500;
+  }
+
+  .providers__list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem 1.75rem;
+    font-size: clamp(1.25rem, 1rem + 0.8vw, 1.625rem);
+    font-weight: 560;
+    letter-spacing: -0.025em;
+  }
+
+  @media (min-width: 960px) {
+    .providers__inner {
+      grid-template-columns: repeat(12, minmax(0, 1fr));
+      column-gap: var(--col-gap);
+      align-items: baseline;
+    }
+    .providers__label {
+      grid-column: 1 / span 3;
+    }
+    .providers__list {
+      grid-column: 4 / -1;
+    }
+  }
+
+  /* Why ------------------------------------------------------------------ */
+  .why {
+    padding-top: clamp(4rem, 2rem + 5vw, 7rem) !important;
+  }
+
+  .compare {
+    grid-column: 1 / -1;
+  }
+
+  .compare thead th:first-child {
+    width: 22%;
+  }
+
+  .compare tbody th {
+    font-weight: 560;
+  }
+
+  .compare td,
+  .compare th {
+    padding-block: 1.15rem;
+  }
+
+  .compare__direct {
+    color: var(--ink-3);
+  }
+
+  .compare__gn {
+    font-weight: 500;
+  }
+
+  @media (min-width: 960px) {
+    .compare {
+      grid-column: 4 / -1;
+    }
+    .compare thead th:first-child {
+      width: 24%;
+    }
+  }
+
+  @media (max-width: 679px) {
+    .compare thead {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip: rect(0 0 0 0);
+    }
+    .compare,
+    .compare tbody,
+    .compare tr {
+      display: block;
+    }
+    .compare tr {
+      display: grid;
+      gap: 0.35rem;
+      padding-block: 1.1rem;
+      border-bottom: 1px solid var(--rule);
+    }
+    .compare tr:first-child {
+      border-top: 1px solid var(--ink);
+    }
+    .compare th,
+    .compare td {
+      display: block;
+      padding: 0 !important;
+      border: 0;
+    }
+    .compare tbody th {
+      margin-bottom: 0.25rem;
+    }
+    .compare td::before {
+      content: attr(data-label) ': ';
+      color: var(--ink-3);
+      font-weight: 400;
+    }
+    .compare__gn::before {
+      color: var(--ink-2) !important;
+    }
+  }
+
+  /* Model index ---------------------------------------------------------- */
+  .index {
+    grid-column: 1 / -1;
+    border-top: 1px solid var(--ink);
+  }
+
+  .index__row {
+    display: grid;
+    gap: 0.75rem 2rem;
+    padding-block: 1.5rem;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .index__provider {
+    font-size: clamp(1.5rem, 1.2rem + 1vw, 2rem);
+    font-weight: 600;
+    letter-spacing: -0.03em;
+    line-height: 1.1;
+  }
+
+  .index__models {
+    display: grid;
+    gap: 0.25rem;
+  }
+
+  .index__models li {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.25rem 1.5rem;
+    padding-block: 0.4rem;
+  }
+
+  .index__model {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.25rem 0.85rem;
+    text-decoration: none;
+  }
+
+  .index__name {
+    font-weight: 560;
+    font-size: 1.0625rem;
+  }
+
+  .index__model:hover .index__name {
+    text-decoration: underline;
+    text-underline-offset: 0.25em;
+  }
+
+  .index__meta {
+    display: flex;
+    gap: 1.25rem;
+    font-size: var(--fs-small);
+    color: var(--ink-3);
+  }
+
+  .index__foot {
+    grid-column: 1 / -1;
+    display: grid;
+    gap: 0.75rem;
+    margin-top: 2rem;
+  }
+
+  @media (min-width: 760px) {
+    .index__row {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+    }
+  }
+
+  @media (min-width: 960px) {
+    .index,
+    .index__foot {
+      grid-column: 4 / -1;
+    }
+  }
+
+  /* Steps ---------------------------------------------------------------- */
+  .steps {
+    display: grid;
+    gap: 2.5rem var(--col-gap);
+    counter-reset: step;
+  }
+
+  .steps__item {
+    display: grid;
+    gap: 0.75rem;
+    align-content: start;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--ink);
+  }
+
+  .steps__n {
+    margin-bottom: 1.5rem;
+    font-size: clamp(3.5rem, 2.5rem + 3vw, 5.5rem);
+    font-weight: 300;
+    line-height: 0.85;
+    letter-spacing: -0.05em;
+    color: var(--ink);
+  }
+
+  .steps__item p {
+    max-width: 22em;
+  }
+
+  @media (min-width: 640px) {
+    .steps {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  @media (min-width: 1100px) {
+    .steps {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+  }
+
+  /* Pricing -------------------------------------------------------------- */
+  .pricing__grid {
+    row-gap: 3rem;
+  }
+
+  .defs {
+    grid-column: 1 / -1;
+    display: grid;
+    gap: 1.75rem;
+    align-content: start;
+  }
+
+  .defs dt {
+    font-weight: 600;
+    margin-bottom: 0.35rem;
+  }
+
+  .defs dd {
+    color: var(--fg-2);
+    max-width: 30em;
+  }
+
+  .defs > div {
+    padding-top: 1rem;
+    border-top: 1px solid var(--line);
+  }
+
+  .pricing__table {
+    grid-column: 1 / -1;
+    display: grid;
+    gap: 1.5rem;
+    align-content: start;
+    justify-items: start;
+  }
+
+  .pricing__table :global(.rates) {
+    width: 100%;
+  }
+
+  @media (min-width: 960px) {
+    .defs {
+      grid-column: 1 / span 3;
+    }
+    .pricing__table {
+      grid-column: 5 / -1;
+    }
+  }
+
+  /* Developers ----------------------------------------------------------- */
+  .dev__grid {
+    row-gap: 2.5rem;
+  }
+
+  .dev__facts {
+    grid-column: 1 / -1;
+    display: grid;
+    gap: 1.5rem;
+    align-content: start;
+  }
+
+  .dev__facts > div {
+    padding-top: 1rem;
+    border-top: 1px solid var(--line);
+  }
+
+  .dev__facts dt {
+    margin-bottom: 0.35rem;
+    font-size: var(--fs-small);
+    font-weight: 600;
+  }
+
+  .dev__facts dd {
+    color: var(--fg-2);
+    font-size: var(--fs-small);
+  }
+
+  .dev__facts code {
+    color: var(--fg);
+    overflow-wrap: anywhere;
+  }
+
+  .dev__code {
+    grid-column: 1 / -1;
+    display: grid;
+    gap: 1rem;
+    min-width: 0;
+  }
+
+  @media (min-width: 960px) {
+    .dev__facts {
+      grid-column: 1 / span 3;
+    }
+    .dev__code {
+      grid-column: 4 / -1;
+    }
+  }
+
+  .clients {
+    margin-top: clamp(4rem, 2rem + 5vw, 7rem);
+    padding-top: 2rem;
+    border-top: 1px solid var(--line);
+    row-gap: 2rem;
+  }
+
+  .clients__head {
+    grid-column: 1 / -1;
+    display: grid;
+    gap: 0.75rem;
+    align-content: start;
+  }
+
+  .clients__head p {
+    max-width: 30em;
+  }
+
+  .clients__group {
+    grid-column: 1 / -1;
+  }
+
+  .clients__title {
+    margin-bottom: 0.75rem;
+    font-size: var(--fs-small);
+    font-weight: 500;
+    color: var(--fg-3);
+  }
+
+  .clients__group li {
+    padding-block: 0.4rem;
+    border-bottom: 1px solid var(--line);
+    font-size: 1.0625rem;
+  }
+
+  @media (min-width: 640px) {
+    .clients__group {
+      grid-column: span 4;
+    }
+  }
+
+  @media (min-width: 960px) {
+    .clients__head {
+      grid-column: 1 / span 3;
+    }
+    .clients__group {
+      grid-column: span 3;
+    }
+  }
+
+  /* Dashboard ------------------------------------------------------------ */
+  .dash__grid {
+    row-gap: 3rem;
+  }
+
+  .dash__copy {
+    grid-column: 1 / -1;
+    display: grid;
+    gap: 2.25rem;
+    align-content: start;
+  }
+
+  .dash__copy .defs {
+    grid-column: auto;
+  }
+
+  .defs--compact {
+    gap: 1.25rem;
+  }
+
+  .dash__art {
+    grid-column: 1 / -1;
+    min-width: 0;
+  }
+
+  @media (min-width: 1024px) {
+    .dash__copy {
+      grid-column: 1 / span 4;
+    }
+    .dash__art {
+      grid-column: 6 / -1;
+    }
+  }
+
+  /* Docs ----------------------------------------------------------------- */
+  .docs__body {
+    grid-column: 1 / -1;
+    display: grid;
+    gap: 3rem;
+  }
+
+  .docs__topics {
+    columns: 2 12rem;
+    column-gap: var(--col-gap);
+    font-size: 1.0625rem;
+  }
+
+  .docs__topics li {
+    break-inside: avoid;
+    padding-block: 0.45rem;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .docs__link {
+    display: grid;
+    gap: 0.5rem;
+    padding-block: 1.75rem;
+    border-block: 1px solid var(--ink);
+    text-decoration: none;
+  }
+
+  .docs__link-label {
+    font-size: var(--fs-small);
+    font-weight: 500;
+    color: var(--ink-2);
+  }
+
+  .docs__link-url {
+    font-size: clamp(2rem, 1.2rem + 3.6vw, 4.5rem);
+    font-weight: 600;
+    letter-spacing: -0.04em;
+    line-height: 1;
+    overflow-wrap: anywhere;
+  }
+
+  .docs__arrow {
+    display: inline-block;
+    font-weight: 400;
+    transition: transform 0.2s var(--ease);
+  }
+
+  .docs__link:hover .docs__link-url {
+    text-decoration: underline;
+    text-decoration-thickness: 2px;
+    text-underline-offset: 0.12em;
+  }
+
+  .docs__link:hover .docs__arrow {
+    transform: translate(3px, -3px);
+  }
+
+  @media (min-width: 960px) {
+    .docs__body {
+      grid-column: 4 / -1;
+    }
+    .docs__topics {
+      columns: 3;
+    }
+  }
+
+  /* FAQ ------------------------------------------------------------------ */
+  .faq-section__list {
+    grid-column: 1 / -1;
+  }
+
+  @media (min-width: 960px) {
+    .faq-section__list {
+      grid-column: 4 / -1;
+    }
+  }
+</style>

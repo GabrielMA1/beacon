@@ -1,0 +1,231 @@
+---
+import Logo from './Logo.astro';
+import { nav, links } from '../config/site';
+
+const path = Astro.url.pathname;
+const isCurrent = (href: string) => href.startsWith('/') && path.startsWith(href);
+---
+<header class="site-header">
+  <div class="wrap site-header__inner">
+    <a class="site-header__brand" href="/" aria-label="Gabnode home">
+      <Logo title="" />
+    </a>
+
+    <nav class="site-header__nav" aria-label="Main">
+      <ul role="list">
+        {nav.map((item) => (
+          <li>
+            <a
+              href={item.href}
+              aria-current={isCurrent(item.href) ? 'page' : undefined}
+              data-external={'external' in item ? '' : undefined}
+            >
+              {item.label}
+            </a>
+          </li>
+        ))}
+      </ul>
+    </nav>
+
+    <div class="site-header__actions">
+      <a class="site-header__signin" href={links.dashboard}>Dashboard</a>
+      <a class="btn btn--sm" href={links.signup}>Get started</a>
+    </div>
+
+    <button class="site-header__menu-btn" type="button" popovertarget="site-menu" aria-controls="site-menu">
+      Menu
+    </button>
+  </div>
+
+  <div id="site-menu" class="menu" popover aria-label="Menu">
+    <div class="wrap menu__top">
+      <a href="/" aria-label="Gabnode home"><Logo title="" /></a>
+      <button class="site-header__menu-btn menu__close" type="button" popovertarget="site-menu" popovertargetaction="hide">
+        Close
+      </button>
+    </div>
+    <nav class="wrap menu__nav" aria-label="Mobile">
+      <ul role="list">
+        <li><a href="/">Overview</a></li>
+        {nav.map((item) => (
+          <li><a href={item.href} aria-current={isCurrent(item.href) ? 'page' : undefined}>{item.label}</a></li>
+        ))}
+        <li><a href={links.dashboard}>Dashboard</a></li>
+      </ul>
+      <div class="menu__cta">
+        <a class="btn" href={links.signup}>Get started</a>
+        <p class="small faint">Create an account, add balance, get an API key.</p>
+      </div>
+    </nav>
+  </div>
+</header>
+
+<style>
+  .site-header {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    background: var(--paper);
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .site-header__inner {
+    display: flex;
+    align-items: center;
+    gap: 2.5rem;
+    height: var(--header-h);
+  }
+
+  .site-header__brand {
+    display: inline-flex;
+    padding-block: 0.5rem;
+    color: var(--ink);
+  }
+
+  .site-header__brand :global(.logo) {
+    height: 1.55rem;
+  }
+
+  .site-header__nav ul {
+    display: flex;
+    gap: 2rem;
+  }
+
+  .site-header__nav a,
+  .site-header__signin {
+    font-size: 0.96875rem;
+    font-weight: 500;
+    text-decoration: none;
+    color: var(--ink-2);
+    padding-block: 0.5rem;
+    transition: color 0.15s var(--ease);
+  }
+
+  .site-header__nav a:hover,
+  .site-header__signin:hover,
+  .site-header__nav a[aria-current='page'] {
+    color: var(--ink);
+  }
+
+  .site-header__nav a[aria-current='page'] {
+    text-decoration: underline;
+    text-underline-offset: 0.45em;
+    text-decoration-thickness: 2px;
+  }
+
+  .site-header__nav a[data-external]::after {
+    content: '↗';
+    display: inline-block;
+    margin-left: 0.25em;
+    font-size: 0.85em;
+    color: var(--ink-3);
+  }
+
+  .site-header__actions {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    margin-left: auto;
+  }
+
+  .site-header__menu-btn {
+    display: none;
+    margin-left: auto;
+    min-height: 2.75rem;
+    padding: 0.5rem 0.9rem;
+    border: 1px solid var(--ink);
+    background: transparent;
+    font-weight: 560;
+    cursor: pointer;
+  }
+
+  @media (max-width: 859px) {
+    .site-header__nav,
+    .site-header__actions {
+      display: none;
+    }
+    .site-header__menu-btn {
+      display: inline-flex;
+      align-items: center;
+    }
+  }
+
+  /* Mobile menu sheet */
+  .menu {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    max-width: none;
+    height: 100dvh;
+    max-height: none;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: var(--paper);
+    color: var(--ink);
+    overflow-y: auto;
+  }
+
+  .menu::backdrop {
+    background: transparent;
+  }
+
+  .menu__top {
+    display: flex;
+    align-items: center;
+    height: var(--header-h);
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .menu__top a {
+    display: inline-flex;
+    color: var(--ink);
+  }
+
+  .menu__top :global(.logo) {
+    height: 1.55rem;
+  }
+
+  .menu__close {
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .menu__nav {
+    padding-top: 1.5rem;
+    padding-bottom: 3rem;
+  }
+
+  .menu__nav ul a {
+    display: block;
+    padding-block: 0.7rem;
+    font-size: 2.25rem;
+    font-weight: 600;
+    letter-spacing: -0.03em;
+    line-height: 1.1;
+    text-decoration: none;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .menu__nav ul a[aria-current='page'] {
+    color: var(--ink-3);
+  }
+
+  .menu__cta {
+    display: grid;
+    gap: 0.9rem;
+    margin-top: 2.25rem;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .menu:popover-open {
+      animation: menu-in 0.22s var(--ease);
+    }
+    @keyframes menu-in {
+      from {
+        opacity: 0;
+        transform: translateY(-8px);
+      }
+    }
+  }
+</style>

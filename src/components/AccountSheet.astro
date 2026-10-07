@@ -1,0 +1,295 @@
+---
+/**
+ * Illustration of a Gabnode account. Deliberately typographic: it shows what
+ * lives in the dashboard without pretending to be the dashboard.
+ */
+const usage = [
+  { model: 'claude-sonnet-5-5', tokens: '182.4M', cost: '$412.18', share: 1 },
+  { model: 'gpt-6-luna', tokens: '611.0M', cost: '$96.73', share: 0.23 },
+  { model: 'deepseek-v4.1-flash', tokens: '74.9M', cost: '$31.40', share: 0.08 },
+];
+const keys = [
+  { name: 'production', suffix: 'a41c' },
+  { name: 'staging', suffix: '9e07' },
+  { name: 'eval-runner', suffix: '13bd' },
+];
+---
+<figure class="acct">
+  <div class="acct__sheet" aria-hidden="true">
+    <div class="acct__bar">
+      <span class="acct__org">Northwind Labs</span>
+      <span class="acct__nav">
+        <span class="is-on">Overview</span><span>Keys</span><span>Usage</span><span>Billing</span><span>Support</span>
+      </span>
+    </div>
+
+    <div class="acct__grid">
+      <section class="acct__block acct__balance">
+        <h4>Balance</h4>
+        <p class="acct__big num">$1,284.60</p>
+        <p class="acct__meta">Prepaid · shared across all models</p>
+        <span class="acct__btn">Add balance</span>
+      </section>
+
+      <section class="acct__block acct__usage">
+        <h4>Usage by model <span>this month</span></h4>
+        <ul>
+          {usage.map((u) => (
+            <li>
+              <span class="model-id">{u.model}</span>
+              <span class="num acct__tokens">{u.tokens}</span>
+              <span class="num">{u.cost}</span>
+              <span class="acct__share" style={`--share:${u.share}`}></span>
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      <section class="acct__block acct__keys">
+        <h4>API keys</h4>
+        <ul>
+          {keys.map((k) => (
+            <li>
+              <span>{k.name}</span>
+              <span class="model-id">••••{k.suffix}</span>
+              <span class="acct__actions">Rotate<span>Revoke</span></span>
+            </li>
+          ))}
+        </ul>
+        <span class="acct__link">+ Create key</span>
+      </section>
+
+      <section class="acct__block acct__support">
+        <h4>Support</h4>
+        <ul>
+          <li><span>Higher rate limit for production</span><span class="acct__status">Open</span></li>
+          <li><span>Invoice details for Q3</span><span class="acct__status is-closed">Closed</span></li>
+        </ul>
+      </section>
+    </div>
+  </div>
+  <figcaption class="acct__caption">
+    Illustration of an account in the Gabnode dashboard: prepaid balance, usage by model, API keys and support requests.
+  </figcaption>
+</figure>
+
+<style>
+  .acct {
+    display: grid;
+    gap: 1rem;
+    min-width: 0;
+  }
+
+  .acct__sheet {
+    background: var(--sheet);
+    color: var(--ink);
+    box-shadow:
+      0 1px 0 rgba(20, 20, 19, 0.05),
+      0 20px 48px -24px rgba(20, 20, 19, 0.3);
+    font-size: 0.875rem;
+    user-select: none;
+  }
+
+  .acct__bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem 1.5rem;
+    padding: 0.95rem 1.25rem;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .acct__org {
+    font-weight: 600;
+  }
+
+  .acct__nav {
+    display: flex;
+    gap: 1.1rem;
+    color: var(--ink-3);
+    font-size: var(--fs-micro);
+  }
+
+  .acct__nav .is-on {
+    color: var(--ink);
+    text-decoration: underline;
+    text-underline-offset: 0.5em;
+    text-decoration-thickness: 2px;
+  }
+
+  .acct__grid {
+    display: grid;
+  }
+
+  .acct ul {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .acct__block {
+    padding: 1.25rem;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .acct__block:last-child {
+    border-bottom: 0;
+  }
+
+  .acct__block h4 {
+    margin-bottom: 0.85rem;
+    font-size: var(--fs-micro);
+    font-weight: 500;
+    color: var(--ink-2);
+  }
+
+  .acct__block h4 span {
+    color: var(--ink-3);
+    font-weight: 400;
+  }
+
+  .acct__big {
+    font-size: clamp(2rem, 1.6rem + 1.4vw, 2.75rem);
+    font-weight: 600;
+    letter-spacing: -0.035em;
+    line-height: 1;
+  }
+
+  .acct__meta {
+    margin-top: 0.5rem;
+    color: var(--ink-3);
+    font-size: var(--fs-micro);
+  }
+
+  .acct__btn {
+    display: inline-block;
+    margin-top: 1.1rem;
+    padding: 0.45rem 0.85rem;
+    background: var(--ink);
+    color: var(--paper);
+    font-size: var(--fs-micro);
+    font-weight: 560;
+  }
+
+  .acct__usage li {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    column-gap: 1rem;
+    align-items: baseline;
+    padding-block: 0.45rem 0.55rem;
+  }
+
+  .acct__usage .model-id {
+    font-size: 0.8rem;
+    color: var(--ink);
+  }
+
+  .acct__tokens {
+    color: var(--ink-3);
+  }
+
+  .acct__share {
+    grid-column: 1 / -1;
+    height: 3px;
+    margin-top: 0.45rem;
+    background: linear-gradient(to right, var(--ink) calc(var(--share) * 100%), var(--rule) 0);
+  }
+
+  .acct__keys li,
+  .acct__support li {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+    padding-block: 0.5rem;
+    border-bottom: 1px dashed var(--rule);
+  }
+
+  .acct__keys li > span:first-child {
+    min-width: 6.5rem;
+    font-weight: 500;
+  }
+
+  .acct__keys .model-id {
+    margin-right: auto;
+    font-size: 0.8rem;
+    white-space: nowrap;
+  }
+
+  .acct__actions {
+    display: flex;
+    gap: 0.9rem;
+    color: var(--ink-2);
+    font-size: var(--fs-micro);
+    text-decoration: underline;
+    text-decoration-color: var(--rule);
+    text-underline-offset: 0.25em;
+  }
+
+  .acct__link {
+    display: inline-block;
+    margin-top: 0.85rem;
+    font-size: var(--fs-micro);
+    font-weight: 560;
+  }
+
+  .acct__status {
+    flex: none;
+    padding: 0.1rem 0.5rem;
+    border: 1px solid var(--ink);
+    font-size: 0.75rem;
+    font-weight: 500;
+  }
+
+  .acct__status.is-closed {
+    border-color: var(--rule);
+    color: var(--ink-3);
+  }
+
+  .acct__caption {
+    font-size: var(--fs-micro);
+    color: var(--fg-3);
+  }
+
+  @media (min-width: 640px) {
+    .acct__grid {
+      grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+      grid-template-areas:
+        'balance usage'
+        'support keys';
+    }
+    .acct__balance {
+      grid-area: balance;
+    }
+    .acct__usage {
+      grid-area: usage;
+    }
+    .acct__keys {
+      grid-area: keys;
+    }
+    .acct__support {
+      grid-area: support;
+    }
+    .acct__block {
+      border-bottom: 1px solid var(--rule);
+    }
+    .acct__balance,
+    .acct__support {
+      border-right: 1px solid var(--rule);
+    }
+    .acct__keys,
+    .acct__support {
+      border-bottom: 0;
+    }
+  }
+
+  @media (max-width: 420px) {
+    .acct__nav span:not(.is-on) {
+      display: none;
+    }
+    .acct__keys .acct__actions span {
+      display: none;
+    }
+  }
+</style>

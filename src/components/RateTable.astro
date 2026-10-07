@@ -1,0 +1,146 @@
+---
+import { formatRate, type Model } from '../lib/catalog';
+
+interface Props {
+  models: Model[];
+  caption: string;
+  /** Visually hide the caption (it stays available to assistive tech) */
+  hideCaption?: boolean;
+  /** Group rows under provider headings */
+  grouped?: boolean;
+  id?: string;
+}
+
+const { models, caption, hideCaption = true, grouped = false, id } = Astro.props;
+
+const groups = grouped
+  ? [...new Map(models.map((m) => [m.provider.id, m.provider])).values()].map((p) => ({
+      provider: p,
+      models: models.filter((m) => m.provider.id === p.id),
+    }))
+  : [{ provider: null, models }];
+---
+<div class="rates" id={id}>
+  <table class="table rates__table" role="table">
+    <caption class:list={[{ 'visually-hidden': hideCaption }, 'rates__caption']}>{caption}</caption>
+    <thead role="rowgroup">
+      <tr role="row">
+        <th role="columnheader" scope="col">Model</th>
+        <th role="columnheader" scope="col" class="r">Input</th>
+        <th role="columnheader" scope="col" class="r">Cached input</th>
+        <th role="columnheader" scope="col" class="r">Output</th>
+      </tr>
+    </thead>
+    {groups.map((g) => (
+      <tbody role="rowgroup">
+        {g.provider && (
+          <tr class="rates__group" role="row">
+            <th role="rowheader" scope="rowgroup" colspan="4">{g.provider.name}</th>
+          </tr>
+        )}
+        {g.models.map((m) => (
+          <tr role="row">
+            <th role="rowheader" scope="row" class="rates__model">
+              <span class="rates__name">{m.name}</span>
+              <span class="model-id">{m.id}</span>
+            </th>
+            <td role="cell" class="r num" data-label="Input">{formatRate(m.pricing.input)}</td>
+            <td role="cell" class="r num" data-label="Cached input">
+              {m.pricing.cachedInput === null ? <span class="faint" title="Not available for this model">—</span> : formatRate(m.pricing.cachedInput)}
+            </td>
+            <td role="cell" class="r num" data-label="Output">{formatRate(m.pricing.output)}</td>
+          </tr>
+        ))}
+      </tbody>
+    ))}
+  </table>
+  <p class="rates__unit small faint">USD per 1 million tokens. A dash means cached input is not offered for that model.</p>
+</div>
+
+<style>
+  .rates__caption:not(.visually-hidden) {
+    caption-side: top;
+    text-align: left;
+    padding-bottom: 1rem;
+  }
+
+  .rates__model {
+    font-weight: 400;
+    display: grid;
+    gap: 0.1rem;
+  }
+
+  .rates__name {
+    font-weight: 560;
+  }
+
+  .rates__table td {
+    font-size: 1.0625rem;
+  }
+
+  .rates__group th {
+    padding-top: 2rem;
+    padding-bottom: 0.6rem;
+    font-size: var(--fs-small);
+    font-weight: 600;
+    color: var(--fg);
+    border-bottom-color: var(--fg);
+  }
+
+  tbody:first-of-type .rates__group th {
+    padding-top: 1.25rem;
+  }
+
+  .rates__unit {
+    margin-top: 1rem;
+  }
+
+  /* Small screens: each model becomes a block with labelled figures */
+  @media (max-width: 639px) {
+    .rates__table thead {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip: rect(0 0 0 0);
+    }
+    .rates__table,
+    .rates__table tbody {
+      display: block;
+    }
+    .rates__table tr:not(.rates__group) {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      column-gap: 1rem;
+      padding-block: 1rem;
+      border-bottom: 1px solid var(--line);
+    }
+    .rates__table .rates__group {
+      display: block;
+    }
+    .rates__table .rates__group th {
+      display: block;
+    }
+    .rates__table tr:not(.rates__group) > * {
+      border: 0;
+      padding: 0 !important;
+    }
+    .rates__table .rates__group th {
+      padding: 1.75rem 0 0.5rem !important;
+    }
+    .rates__model {
+      grid-column: 1 / -1;
+      margin-bottom: 0.75rem;
+    }
+    .rates__table td {
+      text-align: left;
+      font-size: 1rem;
+    }
+    .rates__table td::before {
+      content: attr(data-label);
+      display: block;
+      font-size: var(--fs-micro);
+      color: var(--fg-3);
+    }
+  }
+</style>

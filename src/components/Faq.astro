@@ -1,0 +1,97 @@
+---
+interface Item {
+  q: string;
+  /** HTML string; authored in this repo only */
+  a: string;
+}
+interface Props {
+  items: Item[];
+}
+const { items } = Astro.props;
+---
+<div class="faq">
+  {items.map((item) => (
+    <details class="faq__item">
+      <summary>
+        <h3 class="faq__q">{item.q}</h3>
+        <span class="faq__icon" aria-hidden="true"></span>
+      </summary>
+      <div class="faq__a prose" set:html={item.a} />
+    </details>
+  ))}
+</div>
+
+<style>
+  .faq {
+    border-top: 1px solid var(--fg);
+  }
+
+  .faq__item {
+    border-bottom: 1px solid var(--line);
+  }
+
+  .faq__item summary {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1.5rem;
+    padding-block: 1.35rem;
+    cursor: pointer;
+    list-style: none;
+  }
+
+  .faq__item summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .faq__item summary:focus-visible {
+    outline-offset: -2px;
+  }
+
+  .faq__q {
+    font-size: clamp(1.0625rem, 1rem + 0.3vw, 1.25rem);
+    font-weight: 560;
+    letter-spacing: -0.01em;
+    line-height: 1.35;
+  }
+
+  .faq__item summary:hover .faq__q {
+    text-decoration: underline;
+    text-decoration-color: var(--line);
+    text-underline-offset: 0.25em;
+  }
+
+  .faq__icon {
+    position: relative;
+    flex: none;
+    width: 0.85rem;
+    height: 0.85rem;
+    top: 0.05rem;
+  }
+
+  .faq__icon::before,
+  .faq__icon::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 50%;
+    height: 1.5px;
+    background: currentColor;
+    transition: transform 0.2s var(--ease);
+  }
+
+  .faq__icon::after {
+    transform: rotate(90deg);
+  }
+
+  .faq__item[open] .faq__icon::after {
+    transform: rotate(0deg);
+  }
+
+  .faq__a {
+    padding-bottom: 1.6rem;
+    max-width: 40em;
+    color: var(--fg-2);
+  }
+</style>

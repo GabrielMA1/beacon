@@ -1,0 +1,152 @@
+---
+import Logo from './Logo.astro';
+import { links } from '../config/site';
+
+const year = new Date().getFullYear();
+
+const columns = [
+  {
+    title: 'Product',
+    items: [
+      { label: 'Models', href: '/models/' },
+      { label: 'Pricing', href: '/pricing/' },
+      { label: 'Dashboard', href: links.dashboard },
+    ],
+  },
+  {
+    title: 'Developers',
+    items: [
+      { label: 'Documentation', href: links.docs },
+      { label: 'Quick start', href: '/#developers' },
+      { label: 'Compatible clients', href: '/#clients' },
+    ],
+  },
+  {
+    title: 'Company',
+    items: [
+      { label: 'Contact', href: links.support },
+      { label: 'Support', href: links.dashboard },
+    ],
+  },
+];
+---
+<footer class="site-footer theme-night">
+  <div class="wrap">
+    <div class="grid site-footer__top">
+      <div class="site-footer__brand">
+        <a href="/" aria-label="Gabnode home"><Logo title="" /></a>
+        <p class="small muted">
+          One API and one prepaid balance for leading AI models.
+        </p>
+      </div>
+
+      {columns.map((col) => (
+        <nav class="site-footer__col" aria-label={col.title}>
+          <h2 class="site-footer__heading">{col.title}</h2>
+          <ul role="list">
+            {col.items.map((item) => (
+              <li><a href={item.href}>{item.label}</a></li>
+            ))}
+          </ul>
+        </nav>
+      ))}
+    </div>
+
+    <div class="site-footer__bottom">
+      <p>© {year} Gabnode</p>
+      <p class="site-footer__legal">
+        Gabnode is an independent company. Model names and trademarks belong to their respective owners;
+        their appearance here does not imply affiliation with or endorsement by those companies.
+      </p>
+    </div>
+  </div>
+</footer>
+
+<style>
+  .site-footer {
+    padding-top: clamp(3.5rem, 2rem + 4vw, 6rem);
+    padding-bottom: 2.5rem;
+    border-top: 1px solid var(--line);
+  }
+
+  .site-footer__top {
+    row-gap: 2.5rem;
+  }
+
+  .site-footer__brand {
+    grid-column: 1 / -1;
+    display: grid;
+    gap: 1rem;
+    align-content: start;
+  }
+
+  .site-footer__brand a {
+    display: inline-flex;
+    color: var(--fg);
+    justify-self: start;
+  }
+
+  .site-footer__brand :global(.logo) {
+    height: 1.9rem;
+  }
+
+  .site-footer__brand p {
+    max-width: 22em;
+  }
+
+  .site-footer__col {
+    grid-column: span 6;
+  }
+
+  @media (min-width: 720px) {
+    .site-footer__col {
+      grid-column: span 4;
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .site-footer__brand {
+      grid-column: 1 / span 6;
+    }
+    .site-footer__col {
+      grid-column: span 2;
+    }
+  }
+
+  .site-footer__heading {
+    margin-bottom: 0.9rem;
+    font-size: var(--fs-micro);
+    font-weight: 500;
+    color: var(--fg-3);
+  }
+
+  .site-footer__col li + li {
+    margin-top: 0.45rem;
+  }
+
+  .site-footer__col a {
+    font-size: var(--fs-small);
+    text-decoration: none;
+    color: var(--fg);
+  }
+
+  .site-footer__col a:hover {
+    text-decoration: underline;
+  }
+
+  .site-footer__bottom {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem 3rem;
+    justify-content: space-between;
+    margin-top: clamp(3rem, 2rem + 4vw, 6rem);
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--line);
+    font-size: var(--fs-micro);
+    color: var(--fg-3);
+  }
+
+  .site-footer__legal {
+    max-width: 52em;
+  }
+</style>

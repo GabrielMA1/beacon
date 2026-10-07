@@ -1,0 +1,592 @@
+---
+import Base from '../layouts/Base.astro';
+import SectionHead from '../components/SectionHead.astro';
+import RateTable from '../components/RateTable.astro';
+import Faq from '../components/Faq.astro';
+import FinalCta from '../components/FinalCta.astro';
+import { getCatalog } from '../lib/catalog';
+import { estimate, presets, formatUsd, describeLine, type RateRow } from '../lib/estimate';
+import { faqs } from '../data/faq';
+
+const { models, providers } = await getCatalog();
+
+const rates: RateRow[] = models.map((m) => ({
+  id: m.id,
+  name: m.name,
+  provider: m.provider.name,
+  input: m.pricing.input,
+  cached: m.pricing.cachedInput,
+  output: m.pricing.output,
+}));
+
+const defaultRate = rates.find((r) => r.id === 'claude-sonnet-5-5') ?? rates[0];
+const defaultPreset = presets[0];
+const initial = estimate(defaultRate, defaultPreset.workload);
+const compare = rates
+  .map((r) => ({ r, total: estimate(r, defaultPreset.workload).total }))
+  .sort((a, b) => a.total - b.total);
+const maxTotal = Math.max(...compare.map((c) => c.total));
+
+const billingSteps = [
+  { title: 'Add balance', body: 'Top up your account in the dashboard. Your balance is shared by every model and every API key.' },
+  { title: 'Make requests', body: 'Each request is priced from its input, cached input and output tokens at the model’s published rate.' },
+  { title: 'See every charge', body: 'The cost is deducted from your balance and recorded in your usage history, by model.' },
+];
+---
+<Base
+  title="Pricing"
+  description="Transparent per-token pricing for every model available through Gabnode. Prepaid balance, input, cached input and output rates, and a cost estimator."
+>
+  <section class="page-head">
+    <div class="wrap grid">
+      <p class="label page-head__label">Pricing</p>
+      <h1 class="h1 page-head__title">Pay per token, from one prepaid balance.</h1>
+      <p class="lede page-head__lede">
+        Add balance once and use it with any model. Every request is charged at that model’s published rate, and
+        your usage history shows exactly what it cost.
+      </p>
+    </div>
+  </section>
+
+  <!-- How billing works -->
+  <section class="billing" aria-labelledby="billing-title">
+    <div class="wrap">
+      <h2 id="billing-title" class="visually-hidden">How billing works</h2>
+      <ol class="billing__steps" role="list">
+        {billingSteps.map((s) => (
+          <li>
+            <h3 class="h3">{s.title}</h3>
+            <p class="muted">{s.body}</p>
+          </li>
+        ))}
+      </ol>
+    </div>
+  </section>
+
+  <!-- Rate card -->
+  <section class="section" id="rates" aria-labelledby="rates-title">
+    <div class="wrap">
+      <SectionHead label="Rate card" id="rates-title">
+        Rates for all {models.length} models.
+        <Fragment slot="lede">
+          Input, cached input and output tokens are priced separately, because they cost different amounts to serve.
+          All prices are in US dollars per million tokens.
+        </Fragment>
+      </SectionHead>
+      <div class="grid">
+        <div class="rates-wrap">
+          <RateTable models={models} grouped caption="Rates for every model, grouped by provider, in US dollars per million tokens" />
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Estimator -->
+  <section class="section theme-deep" id="estimate" aria-labelledby="estimate-title">
+    <div class="wrap">
+      <SectionHead label="Estimate" id="estimate-title">
+        What would a month cost?
+        <Fragment slot="lede">
+          Describe your usage and compare the same workload across every model. Estimates use published rates;
+          your actual bill depends on real token counts.
+        </Fragment>
+      </SectionHead>
+
+      <div class="grid est" data-estimator data-rates={JSON.stringify(rates)}>
+        <form class="est__form" data-est-form>
+          <fieldset class="est__presets" data-requires-js>
+            <legend>Start from an example</legend>
+            <div>
+              {presets.map((p, i) => (
+                <label class="est__preset">
+                  <input
+                    type="radio"
+                    name="preset"
+                    value={p.id}
+                    checked={i === 0}
+                    data-input={p.workload.inputM}
+                    data-output={p.workload.outputM}
+                    data-cached={p.workload.cachedPct}
+                  />
+                  <span>{p.label}</span>
+                </label>
+              ))}
+            </div>
+          </fieldset>
+
+          <label class="field">
+            <span>Model</span>
+            <select class="select" name="model">
+              {providers.map((p) => (
+                <optgroup label={p.name}>
+                  {rates.filter((r) => r.provider === p.name).map((r) => (
+                    <option value={r.id} selected={r.id === defaultRate.id}>{r.name}</option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+          </label>
+
+          <div class="est__nums">
+            <label class="field">
+              <span>Input tokens per month (millions)</span>
+              <input class="input" type="number" name="input" min="0" step="any" inputmode="decimal" value={defaultPreset.workload.inputM} />
+            </label>
+            <label class="field">
+              <span>Output tokens per month (millions)</span>
+              <input class="input" type="number" name="output" min="0" step="any" inputmode="decimal" value={defaultPreset.workload.outputM} />
+            </label>
+            <label class="field">
+              <span>Input served from cache (%)</span>
+              <input class="input" type="number" name="cached" min="0" max="100" step="1" inputmode="numeric" value={defaultPreset.workload.cachedPct} />
+            </label>
+          </div>
+          <noscript><p class="small faint">The estimator needs JavaScript. The figures shown are for the example workload.</p></noscript>
+        </form>
+
+        <div class="est__result" aria-live="polite">
+          <div class="est__sheet">
+            <p class="est__sheet-head">
+              <span>Estimated monthly cost</span>
+              <span class="model-id" data-out="model">{defaultRate.id}</span>
+            </p>
+            <dl class="est__lines">
+              {initial.lines.map((l) => (
+                <div data-line={l.key}>
+                  <dt>
+                    {l.label}
+                    <small data-out="detail">{describeLine(l)}</small>
+                  </dt>
+                  <dd data-out="cost">{formatUsd(l.cost)}</dd>
+                </div>
+              ))}
+            </dl>
+            <p class="est__total">
+              <span>Total</span>
+              <strong data-out="total">{formatUsd(initial.total)}</strong>
+            </p>
+          </div>
+        </div>
+
+        <div class="est__compare">
+          <h3 class="est__compare-title">The same workload on every model</h3>
+          <ol class="cmp" role="list" data-compare style={`--rows:${Math.ceil(compare.length / 2)}`}>
+            {compare.map(({ r, total }) => (
+              <li class:list={['cmp__row', { 'is-selected': r.id === defaultRate.id }]} data-id={r.id}>
+                <span class="cmp__name">{r.name} <span class="faint">{r.provider}</span></span>
+                <span class="cmp__cost">{formatUsd(total)}</span>
+                <span class="cmp__bar" style={`--w:${(total / maxTotal).toFixed(4)}`} aria-hidden="true"></span>
+              </li>
+            ))}
+          </ol>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Billing FAQ -->
+  <section class="section" id="billing-faq" aria-labelledby="bfaq-title">
+    <div class="wrap">
+      <SectionHead label="Billing questions" id="bfaq-title">The details.</SectionHead>
+      <div class="grid">
+        <div class="faq-col">
+          <Faq items={faqs.billing} />
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <FinalCta />
+</Base>
+
+<script>
+  import { estimate, formatUsd, describeLine, type RateRow } from '../lib/estimate';
+
+  const root = document.querySelector<HTMLElement>('[data-estimator]');
+  const form = root?.querySelector<HTMLFormElement>('[data-est-form]');
+
+  if (root && form) {
+    const rates: RateRow[] = JSON.parse(root.dataset.rates ?? '[]');
+    const compareList = root.querySelector<HTMLOListElement>('[data-compare]')!;
+    const compareRows = new Map(
+      [...compareList.querySelectorAll<HTMLLIElement>('[data-id]')].map((li) => [li.dataset.id!, li]),
+    );
+    const field = (name: string) => form.elements.namedItem(name) as HTMLInputElement;
+
+    const render = () => {
+      const workload = {
+        inputM: parseFloat(field('input').value) || 0,
+        outputM: parseFloat(field('output').value) || 0,
+        cachedPct: parseFloat(field('cached').value) || 0,
+      };
+      const selected = (form.elements.namedItem('model') as HTMLSelectElement).value;
+      const rate = rates.find((r) => r.id === selected) ?? rates[0];
+      const est = estimate(rate, workload);
+
+      root.querySelector('[data-out="model"]')!.textContent = rate.id;
+      for (const line of est.lines) {
+        const el = root.querySelector(`[data-line="${line.key}"]`);
+        if (!el) continue;
+        el.querySelector('[data-out="detail"]')!.textContent = describeLine(line);
+        el.querySelector('[data-out="cost"]')!.textContent = formatUsd(line.cost);
+      }
+      root.querySelector('[data-out="total"]')!.textContent = formatUsd(est.total);
+
+      const totals = rates.map((r) => ({ id: r.id, total: estimate(r, workload).total })).sort((a, b) => a.total - b.total);
+      const max = Math.max(...totals.map((t) => t.total)) || 1;
+      for (const t of totals) {
+        const li = compareRows.get(t.id);
+        if (!li) continue;
+        li.querySelector('.cmp__cost')!.textContent = formatUsd(t.total);
+        li.style.setProperty('--w', (t.total / max).toFixed(4));
+        li.classList.toggle('is-selected', t.id === rate.id);
+        compareList.appendChild(li);
+      }
+    };
+
+    form.addEventListener('change', (e) => {
+      const t = e.target as HTMLInputElement;
+      if (t.name === 'preset') {
+        field('input').value = t.dataset.input!;
+        field('output').value = t.dataset.output!;
+        field('cached').value = t.dataset.cached!;
+      }
+      render();
+    });
+
+    form.addEventListener('input', (e) => {
+      const t = e.target as HTMLInputElement;
+      if (['input', 'output', 'cached'].includes(t.name)) {
+        form.querySelectorAll<HTMLInputElement>('[name="preset"]').forEach((p) => (p.checked = false));
+      }
+      render();
+    });
+
+    form.addEventListener('submit', (e) => e.preventDefault());
+  }
+</script>
+
+<style>
+  .page-head {
+    padding-top: clamp(3rem, 1.5rem + 5vw, 6.5rem);
+    padding-bottom: clamp(2.5rem, 1.5rem + 3vw, 4.5rem);
+  }
+
+  .page-head .grid {
+    row-gap: 1.5rem;
+  }
+
+  .page-head__label,
+  .page-head__title,
+  .page-head__lede {
+    grid-column: 1 / -1;
+  }
+
+  .page-head__title {
+    max-width: 12em;
+  }
+
+  @media (min-width: 960px) {
+    .page-head__label {
+      grid-column: 1 / span 3;
+      padding-top: 0.8em;
+    }
+    .page-head__title,
+    .page-head__lede {
+      grid-column: 4 / -1;
+    }
+  }
+
+  /* Billing steps */
+  .billing {
+    padding-bottom: var(--section);
+  }
+
+  .billing__steps {
+    display: grid;
+    gap: 2rem var(--col-gap);
+    counter-reset: bill;
+    border-top: 1px solid var(--ink);
+    padding-top: 1.75rem;
+  }
+
+  .billing__steps li {
+    display: grid;
+    gap: 0.6rem;
+    align-content: start;
+    counter-increment: bill;
+  }
+
+  .billing__steps h3::before {
+    content: counter(bill) '.';
+    margin-right: 0.5rem;
+    color: var(--ink-3);
+    font-weight: 400;
+  }
+
+  .billing__steps p {
+    max-width: 26em;
+  }
+
+  @media (min-width: 760px) {
+    .billing__steps {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+  }
+
+  @media (min-width: 960px) {
+    .billing__steps {
+      margin-left: calc((100% + var(--col-gap)) * 3 / 12);
+    }
+  }
+
+  .rates-wrap {
+    grid-column: 1 / -1;
+  }
+
+  @media (min-width: 960px) {
+    .rates-wrap {
+      grid-column: 4 / -1;
+    }
+  }
+
+  /* Estimator */
+  .est {
+    row-gap: 2.5rem;
+  }
+
+  .est__form {
+    grid-column: 1 / -1;
+    display: grid;
+    gap: 1.5rem;
+    align-content: start;
+  }
+
+  .est__presets {
+    margin: 0;
+    padding: 0;
+    border: 0;
+    min-width: 0;
+  }
+
+  .est__presets legend {
+    padding: 0;
+    margin-bottom: 0.5rem;
+    font-size: var(--fs-micro);
+    font-weight: 500;
+    color: var(--fg-2);
+  }
+
+  .est__presets > div {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+  }
+
+  .est__preset {
+    position: relative;
+  }
+
+  .est__preset input {
+    position: absolute;
+    inset: 0;
+    margin: 0;
+    opacity: 0;
+    cursor: pointer;
+  }
+
+  .est__preset span {
+    display: inline-flex;
+    align-items: center;
+    min-height: 2.5rem;
+    padding: 0.35rem 0.85rem;
+    border: 1px solid var(--rule);
+    background: var(--sheet);
+    font-size: 0.9375rem;
+    font-weight: 500;
+  }
+
+  .est__preset:hover span {
+    border-color: var(--ink);
+  }
+
+  .est__preset input:checked + span {
+    background: var(--ink);
+    border-color: var(--ink);
+    color: var(--paper);
+  }
+
+  .est__preset input:focus-visible + span {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
+
+  .est__nums {
+    display: grid;
+    gap: 1rem;
+  }
+
+  .est__result {
+    grid-column: 1 / -1;
+  }
+
+  .est__sheet {
+    padding: 1.5rem;
+    background: var(--sheet);
+    box-shadow:
+      0 1px 0 rgba(20, 20, 19, 0.05),
+      0 16px 40px -24px rgba(20, 20, 19, 0.3);
+  }
+
+  .est__sheet-head {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 0.25rem 1rem;
+    padding-bottom: 0.9rem;
+    border-bottom: 1px solid var(--ink);
+    font-size: var(--fs-micro);
+    font-weight: 500;
+    color: var(--ink-2);
+  }
+
+  .est__lines {
+    border-bottom: 1px dashed var(--rule);
+    padding-block: 0.4rem;
+  }
+
+  .est__lines > div {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 1rem;
+    padding-block: 0.55rem;
+  }
+
+  .est__lines dt {
+    display: grid;
+  }
+
+  .est__lines small {
+    font-size: var(--fs-micro);
+    color: var(--ink-3);
+  }
+
+  .est__lines dd {
+    font-weight: 500;
+  }
+
+  .est__total {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 1rem;
+    padding-top: 1rem;
+    font-weight: 560;
+  }
+
+  .est__total strong {
+    font-size: clamp(2rem, 1.5rem + 1.6vw, 2.75rem);
+    font-weight: 620;
+    letter-spacing: -0.035em;
+    line-height: 1;
+  }
+
+  .est__compare {
+    grid-column: 1 / -1;
+  }
+
+  .est__compare-title {
+    margin-bottom: 1rem;
+    font-size: var(--fs-small);
+    font-weight: 600;
+  }
+
+  .cmp {
+    border-top: 1px solid var(--ink);
+  }
+
+  .cmp__row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    column-gap: 1rem;
+    padding-block: 0.6rem 0.65rem;
+    border-bottom: 1px solid var(--rule);
+    font-size: var(--fs-small);
+  }
+
+  .cmp__name .faint {
+    margin-left: 0.35rem;
+    font-size: var(--fs-micro);
+  }
+
+  .cmp__cost {
+    font-weight: 500;
+  }
+
+  .cmp__bar {
+    grid-column: 1 / -1;
+    height: 2px;
+    margin-top: 0.45rem;
+    background: linear-gradient(to right, var(--ink-3) max(2px, calc(var(--w) * 100%)), transparent 0);
+  }
+
+  .cmp__row.is-selected {
+    font-weight: 600;
+  }
+
+  .cmp__row.is-selected .cmp__name::before {
+    content: '';
+    display: inline-block;
+    width: 0.5rem;
+    height: 0.5rem;
+    margin-right: 0.5rem;
+    border-radius: 50%;
+    background: var(--signal);
+    vertical-align: 0.08em;
+  }
+
+  .cmp__row.is-selected .cmp__bar {
+    background: linear-gradient(to right, var(--ink) max(2px, calc(var(--w) * 100%)), transparent 0);
+  }
+
+  @media (min-width: 720px) {
+    .est__nums {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      align-items: end;
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .est__form {
+      grid-column: 1 / span 6;
+    }
+    .est__nums {
+      grid-template-columns: 1fr;
+    }
+    .est__result {
+      grid-column: 7 / -1;
+      grid-row: 1;
+    }
+    .est__compare {
+      margin-top: 1.5rem;
+    }
+    .cmp {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      grid-template-rows: repeat(var(--rows), auto);
+      grid-auto-flow: column;
+      column-gap: var(--col-gap);
+    }
+  }
+
+  .faq-col {
+    grid-column: 1 / -1;
+  }
+
+  @media (min-width: 960px) {
+    .faq-col {
+      grid-column: 4 / -1;
+    }
+  }
+</style>
