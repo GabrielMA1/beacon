@@ -11,7 +11,8 @@ export default defineConfig({
   },
   integrations: [
     sitemap({
-      filter: (page) => !page.includes('/404'),
+      // Unfinished legal placeholders are noindex and stay out of the sitemap.
+      filter: (page) => !page.includes('/404') && !page.includes('/legal/'),
     }),
   ],
 });

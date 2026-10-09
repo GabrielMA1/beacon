@@ -1,67 +1,28 @@
 ---
 /**
- * Hero exhibit: one request, and the itemised usage it produces.
- * Switching the model re-prices the same request from catalog rates,
- * which shows both "one API" and "transparent pricing" in one place.
+ * Hero illustration: one example request, and the usage receipt it would
+ * produce. Switching the model re-prices the same request from catalog
+ * rates, which shows "one API" and "transparent pricing" together.
+ * It is an illustration, labelled as such; nothing here is live activity.
  */
 import Logo from './Logo.astro';
-import type { Model } from '../lib/catalog';
+import SampleNotice from './SampleNotice.astro';
+import type { Catalog } from '../lib/catalog-schema';
+import { pickExampleModels, priceExample } from '../lib/receipt';
 
 interface Props {
-  models: Model[];
+  catalog: Catalog;
 }
 
-const PREFERRED = ['claude-sonnet-5-5', 'gpt-6.1-sol', 'gemini-3.8-flash', 'deepseek-v4.1-flash'];
-
-// The example workload: a long, cacheable document plus a short question.
-const BASE = { cached: 48_200, input: 2_310, output: 1_180 };
-// Tokenizers differ between model families, so counts differ slightly too.
-const TOKENIZER: Record<string, number> = { openai: 1, anthropic: 1.06, google: 0.97, deepseek: 1.03 };
-const BALANCE = 250;
-
-const { models } = Astro.props;
-
-let picks = PREFERRED.map((id) => models.find((m) => m.id === id)).filter(Boolean) as Model[];
-if (picks.length < 2) {
-  const seen = new Set<string>();
-  picks = models.filter((m) => !seen.has(m.provider.id) && seen.add(m.provider.id)).slice(0, 4);
-}
-
-const usd = (n: number, d = 4) => `$${n.toFixed(d)}`;
-const int = (n: number) => n.toLocaleString('en-US');
-const rate = (n: number) => `$${n.toFixed(Math.round(n * 1000) % 10 !== 0 ? 3 : 2)}`;
-
-const rows = picks.map((m) => {
-  const f = TOKENIZER[m.provider.id] ?? 1;
-  const cachedTokens = Math.round(BASE.cached * f);
-  const inputTokens = Math.round(BASE.input * f);
-  const outputTokens = BASE.output;
-  const cachedRate = m.pricing.cachedInput ?? m.pricing.input;
-  const lines = [
-    { key: 'input', label: 'Input', tokens: inputTokens, rate: m.pricing.input },
-    { key: 'cached', label: m.pricing.cachedInput === null ? 'Input (not cached)' : 'Cached input', tokens: cachedTokens, rate: cachedRate },
-    { key: 'output', label: 'Output', tokens: outputTokens, rate: m.pricing.output },
-  ].map((l) => ({ ...l, cost: (l.tokens * l.rate) / 1_000_000 }));
-  const total = lines.reduce((s, l) => s + l.cost, 0);
-  return {
-    id: m.id,
-    provider: m.provider.name,
-    lines: lines.map((l) => ({
-      key: l.key,
-      label: l.label,
-      detail: `${int(l.tokens)} tokens × ${rate(l.rate)} / 1M`,
-      cost: usd(l.cost),
-    })),
-    total: usd(total),
-    balance: `${usd(BALANCE, 2)} → ${usd(BALANCE - total, 2)}`,
-  };
-});
-
+const { catalog } = Astro.props;
+const rows = pickExampleModels(catalog.models).map(priceExample);
 const first = rows[0];
+const rateWord = catalog.source === 'sample' ? 'sample' : 'published';
 ---
-<figure class="exhibit" data-exhibit data-rows={JSON.stringify(rows)}>
+{first && (
+<figure class="exhibit" data-exhibit data-rows={JSON.stringify(rows)} aria-labelledby="exhibit-caption">
   <fieldset class="exhibit__switch" data-requires-js>
-    <legend class="exhibit__legend">Same request, another model</legend>
+    <legend class="exhibit__legend">Price this request on</legend>
     <div class="exhibit__options">
       {rows.map((r, i) => (
         <label class="exhibit__option">
@@ -75,29 +36,29 @@ const first = rows[0];
   <div class="exhibit__stage">
     <div class="req">
       <p class="req__line">
-        <span class="req__method">POST</span>
-        <span>api.gabnode.com/v1/chat/completions</span>
+        <span class="req__tag">Example request</span>
+        <span><span class="req__method">POST</span> /v1/chat/completions</span>
       </p>
-      <pre class="req__body"><code>&#123;
+      <pre class="req__body" aria-label="Example request body"><code>&#123;
   <span class="k">"model"</span>: <span class="s">"<mark data-field="model">{first.id}</mark>"</span>,
   <span class="k">"messages"</span>: [
     &#123; <span class="k">"role"</span>: <span class="s">"system"</span>,
-      <span class="k">"content"</span>: <span class="c">&lt;policy manual&gt;</span> &#125;,
+      <span class="k">"content"</span>: <span class="c">&lt;48k-token policy manual&gt;</span> &#125;,
     &#123; <span class="k">"role"</span>: <span class="s">"user"</span>,
       <span class="k">"content"</span>: <span class="s">"Can I switch plans?"</span> &#125;
   ]
 &#125;</code></pre>
       <div class="req__resp">
         <p class="req__resp-label">Response</p>
-        <p>Yes. Plan changes take effect immediately, and the remaining days of the current cycle are credited
-          to the new plan (section 4.2)…</p>
+        <p>Yes. Plan changes take effect immediately, and the rest of the current cycle is credited to the new
+          plan (section 4.2)…</p>
       </div>
     </div>
 
-    <div class="receipt" aria-live="polite">
+    <div class="receipt">
       <div class="receipt__head">
         <Logo title="Gabnode" />
-        <span>Usage</span>
+        <span>Usage for this request</span>
       </div>
       <dl class="receipt__model">
         <dt>Model</dt>
@@ -107,62 +68,76 @@ const first = rows[0];
         {first.lines.map((l) => (
           <div class="receipt__line" data-line={l.key}>
             <dt>
-              <span data-field="label">{l.label}</span>
+              <span>{l.label}</span>
               <small data-field="detail">{l.detail}</small>
             </dt>
-            <dd class="num" data-field="cost">{l.cost}</dd>
+            <dd class="num" data-field="cost" data-value={l.cost}>{l.costText}</dd>
           </div>
         ))}
       </dl>
       <dl class="receipt__total">
         <div>
-          <dt>Charged</dt>
-          <dd class="num" data-field="total">{first.total}</dd>
+          <dt>Charged to balance</dt>
+          <dd class="num" data-field="total" data-value={first.total}>{first.totalText}</dd>
         </div>
         <div class="receipt__balance">
-          <dt>Balance</dt>
-          <dd class="num" data-field="balance">{first.balance}</dd>
+          <dt>Example balance</dt>
+          <dd class="num">{first.balanceBefore} → <span data-field="after" data-value={250 - first.total}>{first.balanceAfter}</span></dd>
         </div>
       </dl>
+      <SampleNotice source={catalog.source} variant="inline" class="receipt__stamp" />
     </div>
   </div>
 
-  <figcaption class="exhibit__caption">
-    Illustrative request priced at current catalog rates. Token counts vary slightly between model families.
+  <p class="visually-hidden" aria-live="polite" data-announce></p>
+
+  <figcaption id="exhibit-caption" class="exhibit__caption">
+    Illustration, not live account activity. The same example request is priced at {rateWord} rates for each model,
+    with token counts held constant; real counts vary by model.
   </figcaption>
 </figure>
+)}
 
 <script>
-  type Row = {
-    id: string;
-    lines: { key: string; label: string; detail: string; cost: string }[];
-    total: string;
-    balance: string;
-  };
+  import { formatUsd, formatUsdPrecise } from '../lib/format';
+  import { motion, tweenNumber, warmGsap } from '../scripts/motion';
+  import { EXAMPLE_BALANCE, type ReceiptRow } from '../lib/receipt';
 
   for (const fig of document.querySelectorAll<HTMLElement>('[data-exhibit]')) {
-    const rows: Row[] = JSON.parse(fig.dataset.rows || '[]');
-    const set = (root: ParentNode, field: string, value: string) =>
-      root.querySelectorAll(`[data-field="${field}"]`).forEach((el) => (el.textContent = value));
+    const rows: ReceiptRow[] = JSON.parse(fig.dataset.rows || '[]');
+    const announce = fig.querySelector<HTMLElement>('[data-announce]')!;
+    warmGsap();
 
     fig.addEventListener('change', (e) => {
-      const input = e.target as HTMLInputElement;
-      const row = rows.find((r) => r.id === input.value);
+      const row = rows.find((r) => r.id === (e.target as HTMLInputElement).value);
       if (!row) return;
-      const receipt = fig.querySelector<HTMLElement>('.receipt')!;
-      fig.querySelectorAll('[data-field="model"]').forEach((el) => (el.textContent = row.id));
+      const g = motion();
+
+      const idEls = fig.querySelectorAll<HTMLElement>('[data-field="model"]');
+      idEls.forEach((el) => (el.textContent = row.id));
+
+      const details: HTMLElement[] = [];
       for (const line of row.lines) {
-        const el = fig.querySelector(`[data-line="${line.key}"]`);
+        const el = fig.querySelector<HTMLElement>(`[data-line="${line.key}"]`);
         if (!el) continue;
-        set(el, 'label', line.label);
-        set(el, 'detail', line.detail);
-        set(el, 'cost', line.cost);
+        const detail = el.querySelector<HTMLElement>('[data-field="detail"]')!;
+        detail.textContent = line.detail;
+        details.push(detail);
+        tweenNumber(el.querySelector<HTMLElement>('[data-field="cost"]')!, line.cost, formatUsdPrecise);
       }
-      set(receipt, 'total', row.total);
-      set(receipt, 'balance', row.balance);
-      receipt.classList.remove('is-updated');
-      void receipt.offsetWidth;
-      receipt.classList.add('is-updated');
+      tweenNumber(fig.querySelector<HTMLElement>('[data-field="total"]')!, row.total, formatUsdPrecise, 0.55);
+      tweenNumber(fig.querySelector<HTMLElement>('[data-field="after"]')!, EXAMPLE_BALANCE - row.total, formatUsd, 0.55);
+
+      // One short, orchestrated beat: the model id is re-set in the request
+      // and on the receipt, then the line details settle in order.
+      if (g) {
+        g.killTweensOf([...idEls, ...details]);
+        g.timeline()
+          .fromTo(idEls, { opacity: 0.2 }, { opacity: 1, duration: 0.3, ease: 'power1.out' })
+          .fromTo(details, { opacity: 0, y: 3 }, { opacity: 1, y: 0, duration: 0.3, stagger: 0.05, ease: 'power2.out', clearProps: 'transform' }, '<0.05');
+      }
+
+      announce.textContent = `${row.id}: this example request is charged ${row.totalText}.`;
     });
   }
 </script>
@@ -254,7 +229,9 @@ const first = rows[0];
   .req__line {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.75rem;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 0.4rem 0.75rem;
     padding-bottom: 1rem;
     margin-bottom: 1.1rem;
     border-bottom: 1px solid var(--night-rule);
@@ -268,10 +245,17 @@ const first = rows[0];
     font-weight: 500;
   }
 
+  .req__tag {
+    font-family: var(--font-sans);
+    font-size: var(--fs-micro);
+    font-weight: 500;
+    color: var(--night-ink);
+  }
+
   .req__body {
     margin: 0;
-    font-size: clamp(0.75rem, 0.7rem + 0.2vw, 0.84rem);
-    line-height: 1.75;
+    font-size: clamp(0.78rem, 0.72rem + 0.2vw, 0.875rem);
+    line-height: 1.7;
     white-space: pre-wrap;
     color: var(--night-ink-2);
   }
@@ -351,6 +335,10 @@ const first = rows[0];
     color: var(--ink-2);
   }
 
+  .receipt :global(.receipt__stamp) {
+    margin-top: 0.9rem;
+  }
+
   .receipt__head :global(.logo) {
     height: 1rem;
   }
@@ -398,7 +386,6 @@ const first = rows[0];
   .receipt__line small {
     font-size: var(--fs-micro);
     color: var(--ink-3);
-    font-variant-numeric: tabular-nums;
   }
 
   .receipt__total {
@@ -417,17 +404,6 @@ const first = rows[0];
     color: var(--ink-2);
   }
 
-  @media (prefers-reduced-motion: no-preference) {
-    .receipt.is-updated [data-field] {
-      animation: tick 0.35s var(--ease);
-    }
-    @keyframes tick {
-      from {
-        opacity: 0.25;
-      }
-    }
-  }
-
   .exhibit__caption {
     font-size: var(--fs-micro);
     color: var(--fg-3);
@@ -444,7 +420,7 @@ const first = rows[0];
       grid-column: 8 / -1;
       grid-row: 1;
       align-self: start;
-      margin-top: 3.5rem;
+      margin-top: 1.75rem;
       margin-right: 0;
     }
     .exhibit__caption {

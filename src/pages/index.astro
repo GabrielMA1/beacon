@@ -8,20 +8,25 @@ import AccountSheet from '../components/AccountSheet.astro';
 import Faq from '../components/Faq.astro';
 import ArrowLink from '../components/ArrowLink.astro';
 import FinalCta from '../components/FinalCta.astro';
-import { getCatalog, tierLabels, formatTokens } from '../lib/catalog';
+import SampleNotice from '../components/SampleNotice.astro';
+import { getCatalog, tierLabels, isPriced } from '../lib/catalog';
+import { formatTokens } from '../lib/format';
+import { codeSamples } from '../data/code-samples';
 import { links } from '../config/site';
 import { faqs } from '../data/faq';
 
 const catalog = await getCatalog();
 const { models, providers } = catalog;
+const priced = models.filter(isPriced);
 
 const pick = (ids: string[], n: number) => {
-  const found = ids.map((id) => models.find((m) => m.id === id)).filter(Boolean) as typeof models;
-  const rest = models.filter((m) => !found.includes(m));
+  const found = ids.map((id) => priced.find((m) => m.id === id)).filter((m) => m !== undefined);
+  const rest = priced.filter((m) => !found.includes(m));
   return [...found, ...rest].slice(0, n);
 };
 
-const [codeModelA, codeModelB, codeModelC] = pick(['claude-sonnet-5-5', 'gpt-6.1-sol', 'gemini-3.8-flash'], 3).map((m) => m.id);
+const codeModel = pick(['claude-sonnet-5-5'], 1)[0]?.id ?? models[0].id;
+const samples = codeSamples(codeModel);
 const rateExcerpt = pick(
   ['claude-sonnet-5-5', 'gpt-6.1-sol', 'gemini-3.8-flash', 'deepseek-v4-pro', 'kimi-k2.6', 'qwen3.8-flash'],
   6,
@@ -36,105 +41,30 @@ const comparison = [
   ['Billing', 'A payment method and invoice per provider', 'One prepaid balance, shared by every model'],
   ['Integration', 'Different SDKs and request formats', 'One OpenAI-compatible API'],
   ['Changing models', 'Often new integration work', 'Change the model parameter'],
-  ['Usage', 'Spread across provider consoles', 'One usage history, itemised by request and model'],
+  ['Usage', 'Spread across provider consoles', 'One usage history, broken down by model'],
 ];
 
 const steps = [
   { title: 'Create an account', body: 'Sign up in the Gabnode dashboard. One account covers every model we serve.' },
   { title: 'Add balance', body: 'Top up a prepaid balance. It is shared across all models, so there is nothing to allocate.' },
-  { title: 'Create an API key', body: 'Generate a key for each application or environment. Rotate or revoke keys at any time.' },
-  { title: 'Send requests', body: 'Call the API with the model you want. Each request is charged at that model’s published rate.' },
-];
-
-const samples = [
-  {
-    id: 'curl',
-    label: 'cURL',
-    lang: 'bash',
-    code: `curl ${links.apiBase}/chat/completions \\
-  -H "Authorization: Bearer $GABNODE_API_KEY" \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "model": "${codeModelA}",
-    "messages": [
-      {"role": "user", "content": "Summarise this changelog in three bullet points."}
-    ]
-  }'`,
-  },
-  {
-    id: 'python',
-    label: 'Python',
-    lang: 'python',
-    code: `import os
-from openai import OpenAI
-
-client = OpenAI(
-    base_url="${links.apiBase}",
-    api_key=os.environ["GABNODE_API_KEY"],
-)
-
-response = client.chat.completions.create(
-    model="${codeModelB}",
-    messages=[{"role": "user", "content": "Summarise this changelog in three bullet points."}],
-)
-
-print(response.choices[0].message.content)
-print(response.usage)  # tokens billed for this request`,
-  },
-  {
-    id: 'typescript',
-    label: 'TypeScript',
-    lang: 'ts',
-    code: `import OpenAI from "openai";
-
-const client = new OpenAI({
-  baseURL: "${links.apiBase}",
-  apiKey: process.env.GABNODE_API_KEY,
-});
-
-const stream = await client.chat.completions.create({
-  model: "${codeModelC}",
-  messages: [{ role: "user", content: "Draft release notes for version 2.4." }],
-  stream: true,
-});
-
-for await (const chunk of stream) {
-  process.stdout.write(chunk.choices[0]?.delta?.content ?? "");
-}`,
-  },
-  {
-    id: 'models',
-    label: 'List models',
-    lang: 'bash',
-    code: `curl ${links.apiBase}/models \\
-  -H "Authorization: Bearer $GABNODE_API_KEY"`,
-  },
+  { title: 'Create an API key', body: 'Generate a key for each application or environment, and rotate or revoke keys from the dashboard.' },
+  { title: 'Send requests', body: 'Call the API with the model you want. Usage is charged to your balance at that model’s rate.' },
 ];
 
 const clients = [
   { group: 'SDKs and frameworks', items: ['OpenAI Python SDK', 'OpenAI Node.js SDK', 'Vercel AI SDK', 'LangChain', 'LlamaIndex', 'LiteLLM'] },
-  { group: 'Editors and coding agents', items: ['Continue', 'Cline', 'Roo Code', 'Zed', 'Aider'] },
-  { group: 'Chat interfaces', items: ['Open WebUI', 'LibreChat', 'Jan', 'Chatbox'] },
+  { group: 'Editors and coding agents', items: ['Continue', 'Cline', 'Zed', 'Aider'] },
+  { group: 'Chat interfaces', items: ['Open WebUI', 'LibreChat'] },
 ];
 
 const dashboardFeatures = [
-  { title: 'Balance', body: 'See your balance at any time, top up when you need to and review past purchases.' },
-  { title: 'API keys', body: 'Create keys per application or environment. Rotate or revoke them yourself, instantly.' },
-  { title: 'Usage', body: 'Requests, tokens and spend, broken down by model, so costs are never a surprise.' },
-  { title: 'Support', body: 'Open a ticket, follow its history and close it once it’s resolved.' },
+  { title: 'Balance', body: 'See your balance, add to it, and review past purchases.' },
+  { title: 'API keys', body: 'Create keys per application or environment, and rotate or revoke them yourself.' },
+  { title: 'Usage', body: 'Requests, tokens and spend, broken down by model.' },
+  { title: 'Support', body: 'Open a ticket, follow its history, and close it once it’s resolved.' },
 ];
 
-const docTopics = [
-  'Quick start',
-  'Authentication',
-  'Chat completions',
-  'Streaming',
-  'Tool calling',
-  'Structured output',
-  'Listing models',
-  'Errors and rate limits',
-  'Usage and billing',
-];
+const docTopics = ['Quick start', 'Authentication', 'Chat completions', 'Models and rates', 'Errors', 'Usage and billing'];
 ---
 <Base>
   <!-- Hero -->
@@ -144,22 +74,25 @@ const docTopics = [
 
       <div class="hero__copy">
         <p class="lede hero__lede">
-          Gabnode gives your applications access to models from {leadProviders} and others through a single
-          OpenAI-compatible API. One account, one prepaid balance, and per-token rates published for every model.
+          Use models from {leadProviders} and others through one OpenAI-compatible API, paid from one prepaid
+          balance at per-token rates you can read before you send a request.
         </p>
         <div class="actions">
           <a class="btn" href={links.signup}>Get started</a>
           <ArrowLink href="/models/">View models</ArrowLink>
         </div>
-        <ul class="hero__facts small" role="list">
-          <li><strong>{models.length} models</strong> from {providers.length} providers</li>
-          <li><strong>OpenAI-compatible</strong> API</li>
-          <li><strong>Prepaid</strong>, billed per token</li>
-        </ul>
+        <dl class="hero__facts">
+          <div><dt>One API</dt><dd>OpenAI-compatible requests</dd></div>
+          <div><dt>Many models</dt><dd>From {providers.length} providers</dd></div>
+          <div><dt>One balance</dt><dd>Prepaid, charged per token</dd></div>
+        </dl>
+        <p class="hero__return small">
+          Already a customer? <a href={links.dashboard}>Open the dashboard</a>{' or '}<a href={links.docs}>read the docs</a>.
+        </p>
       </div>
 
       <div class="hero__exhibit">
-        <RequestReceipt models={models} />
+        <RequestReceipt catalog={catalog} />
       </div>
     </div>
   </section>
@@ -167,7 +100,10 @@ const docTopics = [
   <!-- Providers -->
   <section class="providers" aria-labelledby="providers-title">
     <div class="wrap providers__inner">
-      <h2 id="providers-title" class="label providers__label">Models available through Gabnode from</h2>
+      <h2 id="providers-title" class="label providers__label">
+        Models available through Gabnode from
+        {catalog.source === 'sample' && <span class="providers__note">Provisional list</span>}
+      </h2>
       <ul class="providers__list" role="list">
         {providerNames.map((name) => <li>{name}</li>)}
       </ul>
@@ -215,8 +151,8 @@ const docTopics = [
       <SectionHead label="Models" id="models-title">
         Models available through Gabnode.
         <Fragment slot="lede">
-          Frontier and open-weight models from leading labs, behind one endpoint. Choose the right model for each
-          request, and change your mind without changing your integration.
+          Frontier and open-weight models from leading labs, behind one endpoint. Choose the model for each request,
+          and change it without changing your integration.
         </Fragment>
       </SectionHead>
 
@@ -244,9 +180,11 @@ const docTopics = [
         </ul>
 
         <div class="index__foot">
-          <ArrowLink href="/models/">Compare all {models.length} models</ArrowLink>
+          <ArrowLink href="/models/">Compare models, capabilities and rates</ArrowLink>
           <p class="small faint">
-            Availability can change. Your application can always fetch the current list from <code>GET /v1/models</code>.
+            {catalog.source === 'sample'
+              ? 'This is a provisional list. The launch catalog may differ, and availability can change after launch.'
+              : 'Availability can change. The models page always reflects the current catalog.'}
           </p>
         </div>
       </div>
@@ -275,8 +213,8 @@ const docTopics = [
       <SectionHead label="Pricing" id="pricing-title">
         Per-token rates, published for every model.
         <Fragment slot="lede">
-          Each request draws down your prepaid balance at the model’s published rate. You pay for the tokens you use,
-          from a balance you control.
+          Usage is charged to your prepaid balance at each model’s rate, with input, cached input and output tokens
+          priced separately.
         </Fragment>
       </SectionHead>
 
@@ -288,15 +226,16 @@ const docTopics = [
           </div>
           <div>
             <dt>Cached input</dt>
-            <dd>Repeated prompt prefixes, such as long instructions or documents, served from cache at a reduced rate on models that support it.</dd>
+            <dd>Repeated prompt prefixes, such as long instructions or documents, read from cache. Models with a cached-input rate bill these tokens at that lower rate.</dd>
           </div>
           <div>
             <dt>Output tokens</dt>
-            <dd>Everything the model generates, including reasoning tokens on models that produce them.</dd>
+            <dd>The tokens the model generates in its response.</dd>
           </div>
         </dl>
 
         <div class="pricing__table">
+          <SampleNotice source={catalog.source} />
           <RateTable models={rateExcerpt} caption="Selected model rates in US dollars per million tokens" />
           <ArrowLink href="/pricing/">Full rate card and cost estimator</ArrowLink>
         </div>
@@ -310,8 +249,8 @@ const docTopics = [
       <SectionHead label="Developers" id="dev-title">
         Point an OpenAI-compatible client at Gabnode.
         <Fragment slot="lede">
-          Use the official OpenAI SDKs or any client that lets you set a base URL. Set your Gabnode key, change the
-          base URL, choose a model.
+          Gabnode accepts requests in the OpenAI Chat Completions format. Set the base URL, use your Gabnode key, and
+          choose a model.
         </Fragment>
       </SectionHead>
 
@@ -326,28 +265,35 @@ const docTopics = [
             <dd>Your API key as a bearer token in the <code>Authorization</code> header.</dd>
           </div>
           <div>
-            <dt>Endpoints</dt>
-            <dd><code>/v1/chat/completions</code> with streaming, and <code>/v1/models</code> for the current model list.</dd>
+            <dt>Endpoint</dt>
+            <dd><code>POST /v1/chat/completions</code></dd>
           </div>
           <div>
-            <dt>Model features</dt>
-            <dd>Tool calling, structured output and image input work wherever the selected model supports them.</dd>
+            <dt>Model</dt>
+            <dd>The model’s ID, exactly as listed on the <a href="/models/">models page</a>.</dd>
+          </div>
+          <div>
+            <dt>Optional features</dt>
+            <dd>Streaming, tool calling, structured output and image input depend on the model. Check the documentation before relying on one.</dd>
           </div>
         </dl>
 
         <div class="dev__code">
           <CodeTabs samples={samples} label="Code examples" />
-          <p class="small faint">Keep your key in an environment variable or secret store. Never ship it in client-side code.</p>
+          <p class="small faint">
+            Replace <code>YOUR_API_KEY</code> with a key from the dashboard. Keep it in an environment variable or secret
+            store, on your server; never ship it in browser or mobile app code.
+          </p>
         </div>
       </div>
 
       <!-- Supported clients -->
       <div class="grid clients" id="clients">
         <div class="clients__head">
-          <h2 class="h3">Works with tools you already use</h2>
+          <h2 class="h3">Bring the client you already use</h2>
           <p class="muted small">
-            These SDKs, frameworks and applications accept a custom OpenAI-compatible endpoint. Which features are
-            available depends on the client and the model; the documentation covers setup.
+            These SDKs, frameworks and applications let you configure a custom OpenAI-compatible base URL. Gabnode has
+            not certified them; whether a client works fully depends on the API features it uses and the model you choose.
           </p>
         </div>
         {clients.map((c) => (
@@ -428,12 +374,12 @@ const docTopics = [
 <style>
   /* Hero ----------------------------------------------------------------- */
   .hero {
-    padding-top: clamp(3rem, 1.5rem + 6vw, 7.5rem);
+    padding-top: clamp(2.25rem, 1rem + 3.6vw, 4rem);
     padding-bottom: clamp(4rem, 2rem + 6vw, 8rem);
   }
 
   .hero__grid {
-    row-gap: clamp(2.5rem, 1.5rem + 3vw, 4rem);
+    row-gap: clamp(1.75rem, 1.25rem + 1.6vw, 2.75rem);
   }
 
   .hero__title {
@@ -453,15 +399,37 @@ const docTopics = [
 
   .hero__facts {
     display: grid;
-    gap: 0.35rem;
-    padding-top: 1.25rem;
-    border-top: 1px solid var(--rule);
+    border-top: 1px solid var(--ink);
+    font-size: var(--fs-small);
+  }
+
+  .hero__facts > div {
+    display: grid;
+    grid-template-columns: 7.5rem minmax(0, 1fr);
+    gap: 1rem;
+    padding-block: 0.6rem;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .hero__facts dt {
+    font-weight: 600;
+  }
+
+  .hero__facts dd {
     color: var(--ink-2);
   }
 
-  .hero__facts strong {
-    font-weight: 600;
+  .hero__return {
+    color: var(--ink-2);
+  }
+
+  .hero__return a {
     color: var(--ink);
+    text-decoration-color: var(--rule);
+  }
+
+  .hero__return a:hover {
+    text-decoration-color: currentColor;
   }
 
   .hero__exhibit {
@@ -472,7 +440,7 @@ const docTopics = [
   @media (min-width: 1100px) {
     .hero__copy {
       grid-column: 1 / span 4;
-      padding-top: 0.5rem;
+      padding-top: 2.4rem;
     }
     .hero__exhibit {
       grid-column: 5 / -1;
@@ -496,6 +464,22 @@ const docTopics = [
   .providers__label {
     color: var(--ink-2);
     font-weight: 500;
+  }
+
+  .providers__note {
+    display: block;
+    margin-top: 0.25rem;
+    font-size: var(--fs-micro);
+    font-weight: 500;
+    color: var(--signal-text);
+  }
+
+  .pricing__table :global(.sample-note) {
+    width: 100%;
+  }
+
+  .dev__facts a {
+    color: var(--fg);
   }
 
   .providers__list {

@@ -1,0 +1,71 @@
+---
+/**
+ * Placeholder for a legal document that has not been finalised.
+ * It states plainly that the document is not yet published and makes no
+ * commitments of its own. Replace the whole page with the approved text.
+ */
+import Base from '../layouts/Base.astro';
+import { links } from '../config/site';
+
+interface Props {
+  title: string;
+  description: string;
+}
+const { title, description } = Astro.props;
+---
+<Base title={title} description={description} noindex>
+  <section class="legal">
+    <div class="wrap grid">
+      <p class="label legal__label">Legal</p>
+      <div class="legal__body">
+        <h1 class="h1">{title}</h1>
+        <p class="legal__status"><span>Not yet published</span></p>
+        <div class="prose lede">
+          <p>
+            Gabnode’s {title} is being prepared and has not been published. Nothing on this page is a term or policy
+            of Gabnode.
+          </p>
+          <p>
+            Questions in the meantime: <a href={links.support}>{links.supportEmail}</a>.
+          </p>
+        </div>
+        <slot />
+      </div>
+    </div>
+  </section>
+</Base>
+
+<style>
+  .legal {
+    padding-block: clamp(3rem, 1.5rem + 5vw, 6.5rem) var(--section);
+  }
+  .legal .grid {
+    row-gap: 1.5rem;
+  }
+  .legal__label,
+  .legal__body {
+    grid-column: 1 / -1;
+  }
+  .legal__body {
+    display: grid;
+    gap: 1.75rem;
+    justify-items: start;
+  }
+  .legal__status span {
+    display: inline-block;
+    padding: 0.2rem 0.6rem;
+    border: 1px solid var(--signal-text);
+    color: var(--signal-text);
+    font-size: var(--fs-micro);
+    font-weight: 600;
+  }
+  @media (min-width: 960px) {
+    .legal__label {
+      grid-column: 1 / span 3;
+      padding-top: 0.8em;
+    }
+    .legal__body {
+      grid-column: 4 / -1;
+    }
+  }
+</style>

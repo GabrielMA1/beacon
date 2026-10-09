@@ -1,5 +1,6 @@
 ---
-import { formatRate, type Model } from '../lib/catalog';
+import type { Model } from '../lib/catalog-schema';
+import { formatRate } from '../lib/format';
 
 interface Props {
   models: Model[];
@@ -44,17 +45,25 @@ const groups = grouped
               <span class="rates__name">{m.name}</span>
               <span class="model-id">{m.id}</span>
             </th>
-            <td role="cell" class="r num" data-label="Input">{formatRate(m.pricing.input)}</td>
-            <td role="cell" class="r num" data-label="Cached input">
-              {m.pricing.cachedInput === null ? <span class="faint" title="Not available for this model">—</span> : formatRate(m.pricing.cachedInput)}
-            </td>
-            <td role="cell" class="r num" data-label="Output">{formatRate(m.pricing.output)}</td>
+            {m.pricing ? (
+              <>
+                <td role="cell" class="r num" data-label="Input">{formatRate(m.pricing.input)}</td>
+                <td role="cell" class="r num" data-label="Cached input">
+                  {m.pricing.cachedInput === null ? (
+                    <span class="faint"><span aria-hidden="true">—</span><span class="visually-hidden">No cached-input rate</span></span>
+                  ) : formatRate(m.pricing.cachedInput)}
+                </td>
+                <td role="cell" class="r num" data-label="Output">{formatRate(m.pricing.output)}</td>
+              </>
+            ) : (
+              <td role="cell" class="r faint rates__unpriced" colspan="3">Rates not yet published</td>
+            )}
           </tr>
         ))}
       </tbody>
     ))}
   </table>
-  <p class="rates__unit small faint">USD per 1 million tokens. A dash means cached input is not offered for that model.</p>
+  <p class="rates__unit small faint">US dollars per 1 million tokens. A dash means the model has no cached-input rate, so all of its input is billed at the input rate.</p>
 </div>
 
 <style>
@@ -89,6 +98,10 @@ const groups = grouped
 
   tbody:first-of-type .rates__group th {
     padding-top: 1.25rem;
+  }
+
+  .rates__unpriced {
+    font-size: var(--fs-small) !important;
   }
 
   .rates__unit {
@@ -135,6 +148,12 @@ const groups = grouped
     .rates__table td {
       text-align: left;
       font-size: 1rem;
+    }
+    .rates__table .rates__unpriced {
+      grid-column: 1 / -1;
+    }
+    .rates__table .rates__unpriced::before {
+      display: none;
     }
     .rates__table td::before {
       content: attr(data-label);

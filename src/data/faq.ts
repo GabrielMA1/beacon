@@ -1,6 +1,13 @@
 import { links } from '../config/site';
 
-/** Answers are trusted HTML authored in this repository. */
+/**
+ * Answers are trusted HTML authored in this repository.
+ *
+ * Only state things that are true by definition of the product or confirmed
+ * by the platform. Policy answers (what happens at a zero balance, refunds,
+ * when a new rate applies, how reasoning tokens are billed, …) stay out until
+ * confirmed — see LAUNCH.md, "Product decisions".
+ */
 export const faqs = {
   general: [
     {
@@ -13,19 +20,15 @@ export const faqs = {
     },
     {
       q: 'How does billing work?',
-      a: `<p>You add funds to a prepaid balance in the dashboard. Each request is charged for its input, cached input and output tokens at the model’s published rate, and the amount is deducted from your balance. Your usage history shows what each request cost.</p><p>See <a href="/pricing/">Pricing</a> for every rate.</p>`,
-    },
-    {
-      q: 'What happens when my balance runs out?',
-      a: `<p>Requests are declined with a clear error instead of running up a bill. Add balance in the dashboard and you can continue straight away.</p>`,
+      a: `<p>You add funds to a prepaid balance in the dashboard. Usage is charged against that balance at each model’s per-token rates, with input, cached input and output tokens priced separately.</p><p>See <a href="/pricing/">Pricing</a> for the rate card and an estimator.</p>`,
     },
     {
       q: 'Is the API compatible with OpenAI’s?',
-      a: `<p>Gabnode provides an OpenAI-compatible Chat Completions API, so the official OpenAI SDKs and many other clients work by changing the base URL and API key. Features such as tool calling or image input depend on the model you choose. Where behaviour differs, the <a href="${links.docs}">documentation</a> says so.</p>`,
+      a: `<p>Gabnode accepts requests in the OpenAI Chat Completions format, so the official OpenAI SDKs and many other clients can be pointed at Gabnode by changing the base URL and API key. Optional features such as streaming, tool calling and image input vary by model; check the <a href="${links.docs}">documentation</a> before relying on one.</p>`,
     },
     {
       q: 'How are tokens counted?',
-      a: `<p>Each model counts tokens with its own tokenizer, so the same text can produce slightly different counts on different models. Every response includes a <code>usage</code> object with the exact counts billed for that request.</p>`,
+      a: `<p>Each model counts tokens with its own tokenizer, so the same text can produce different token counts on different models. That is why the same prompt can cost slightly different amounts on two models with the same rates.</p>`,
     },
     {
       q: 'Can I use separate keys for different projects?',
@@ -38,24 +41,16 @@ export const faqs = {
   ],
   billing: [
     {
-      q: 'When am I charged?',
-      a: `<p>When you add balance. After that, each request deducts its cost from your balance as it completes.</p>`,
-    },
-    {
       q: 'What is cached input?',
-      a: `<p>Many applications send the same long prefix on every request: instructions, a policy document, a codebase summary. On models that support prompt caching, tokens served from cache are billed at the lower cached input rate. Models without caching show a dash in the rate card and bill all input at the standard rate.</p>`,
+      a: `<p>Many applications send the same long prefix on every request: instructions, a policy document, a codebase summary. When a model serves part of your input from its cache and has a cached-input rate, those tokens are billed at that lower rate. Models without a cached-input rate show a dash in the rate card, and all of their input is billed at the input rate.</p>`,
     },
     {
-      q: 'Are reasoning tokens billed?',
-      a: `<p>Yes. Models that reason before answering produce tokens while they think, and those are billed as output tokens. The <code>usage</code> object in each response reports them.</p>`,
+      q: 'Is the estimate what I will be charged?',
+      a: `<p>No. The estimator multiplies the volumes you enter by the rates in the rate card. Your actual charges are calculated by Gabnode from the tokens each request really uses, which depend on each model’s tokenizer and on how much of your input is served from cache.</p>`,
     },
     {
-      q: 'Can rates change?',
-      a: `<p>Rates can change, for example when a model provider changes its own pricing. The rate applied to a request is the one published at the time the request is made.</p>`,
-    },
-    {
-      q: 'What happens when my balance runs out?',
-      a: `<p>Requests are declined with a clear error instead of running up a bill. Add balance in the dashboard and you can continue straight away.</p>`,
+      q: 'Which currency are rates in?',
+      a: `<p>All rates are shown in US dollars per million tokens.</p>`,
     },
   ],
 };
