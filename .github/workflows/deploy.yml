@@ -32,13 +32,23 @@ jobs:
 
       - run: npm ci
 
-      - run: npm run check
+      - name: Type-check
+        run: npm run check
+
+      - name: Unit tests (pricing maths, catalog validation, code samples)
+        run: npm test
 
       - name: Build
+        # Unset variable → labelled sample catalog. Set → live catalog; if it
+        # cannot be fetched or fails validation the build fails and the
+        # previous deployment stays online.
         run: npm run build
         env:
           # A public URL, stored as a repository *variable* (not a secret).
           PUBLIC_MODELS_API_URL: ${{ vars.PUBLIC_MODELS_API_URL }}
+
+      - name: Check links
+        run: npm run check:links
 
       - uses: actions/configure-pages@v5
 

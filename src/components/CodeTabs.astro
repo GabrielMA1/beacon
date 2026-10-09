@@ -33,10 +33,11 @@ const uid = `code-${label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
         </button>
       ))}
     </div>
-    <button type="button" class="code-tabs__copy" data-copy data-requires-js>
-      <span data-copy-label>Copy</span>
+    <button type="button" class="code-tabs__copy" data-copy data-requires-js aria-label={`Copy ${samples[0].label} example`}>
+      <span data-copy-label aria-hidden="true">Copy</span>
     </button>
   </div>
+  <p class="visually-hidden" role="status" data-copy-status></p>
   {samples.map((s, i) => (
     <div
       class="code-tabs__panel"
@@ -58,6 +59,7 @@ const uid = `code-${label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
     const panels = [...root.querySelectorAll<HTMLElement>('[role="tabpanel"]')];
     const copyBtn = root.querySelector<HTMLButtonElement>('[data-copy]');
     const copyLabel = root.querySelector<HTMLElement>('[data-copy-label]');
+    const status = root.querySelector<HTMLElement>('[data-copy-status]');
 
     const select = (i: number, focus = false) => {
       tabs.forEach((t, j) => {
@@ -67,6 +69,7 @@ const uid = `code-${label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
         panels[j].hidden = !on;
       });
       if (focus) tabs[i].focus();
+      copyBtn?.setAttribute('aria-label', `Copy ${tabs[i].textContent?.trim()} example`);
     };
 
     tabs.forEach((tab, i) => {
@@ -86,15 +89,20 @@ const uid = `code-${label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
       try {
         await navigator.clipboard.writeText(panel.dataset.code ?? '');
         copyLabel.textContent = 'Copied';
+        if (status) status.textContent = 'Example copied to clipboard.';
       } catch {
-        copyLabel.textContent = 'Press Ctrl+C to copy';
+        copyLabel.textContent = 'Selected — press Ctrl+C';
+        if (status) status.textContent = 'Could not copy automatically. The example is selected; press Control C to copy.';
         const range = document.createRange();
         range.selectNodeContents(panel.querySelector('code') ?? panel);
         const sel = getSelection();
         sel?.removeAllRanges();
         sel?.addRange(range);
       }
-      setTimeout(() => (copyLabel.textContent = 'Copy'), 1800);
+      setTimeout(() => {
+        copyLabel.textContent = 'Copy';
+        if (status) status.textContent = '';
+      }, 2000);
     });
   }
 </script>

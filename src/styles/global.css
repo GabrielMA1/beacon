@@ -35,7 +35,7 @@
   --font-sans: 'Schibsted Grotesk Variable', 'Schibsted Grotesk', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
   --font-mono: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
 
-  --fs-display: clamp(3.1rem, 1.2rem + 7.4vw, 8.25rem);
+  --fs-display: clamp(3.1rem, 1.2rem + 7vw, 7.5rem);
   --fs-h1: clamp(2.6rem, 1.4rem + 4.6vw, 5.5rem);
   --fs-h2: clamp(2rem, 1.25rem + 2.9vw, 3.75rem);
   --fs-h3: clamp(1.25rem, 1.1rem + 0.5vw, 1.5rem);

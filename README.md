@@ -4,7 +4,8 @@ The public website for Gabnode: one API and one prepaid balance for leading AI m
 
 This repository is **public**. It contains only the static marketing site. The API, dashboard,
 authentication, billing and every credential live in the private platform repository. Never add
-secrets, provider keys, customer data or private infrastructure details here.
+secrets, provider keys, customer data or private infrastructure details here. The browser never
+enforces balances, authorization or billing; those belong to the platform.
 
 | Property  | URL                            | Lives in            |
 | --------- | ------------------------------ | ------------------- |
@@ -13,81 +14,75 @@ secrets, provider keys, customer data or private infrastructure details here.
 | Docs      | https://docs.gabnode.com       | separate            |
 | Dashboard | https://dashboard.gabnode.com  | platform repository |
 
+**Before launch, read [LAUNCH.md](LAUNCH.md)**: blockers, product decisions to confirm, and
+the inputs needed for the Terms of Service and Privacy Policy.
+
 ## Stack
 
-- [Astro](https://astro.build) with static output. Pages ship as HTML and CSS, plus small
-  scripts for the interactive parts (model switcher, filters, estimator, code tabs).
-- Plain CSS with design tokens in `src/styles/global.css`. No CSS framework.
-- Self-hosted fonts (Schibsted Grotesk, IBM Plex Mono) from Fontsource, so there are no third-party requests.
-- `@astrojs/sitemap` for the sitemap.
+- [Astro](https://astro.build) with static output; plain CSS with design tokens in `src/styles/global.css`.
+- Self-hosted fonts (Schibsted Grotesk, IBM Plex Mono). No cookies, analytics or third-party requests.
+- [GSAP](https://gsap.com) for two interactions only (see "Motion"). Loaded lazily, never for reduced-motion visitors.
+- `@astrojs/sitemap`. Vitest for unit tests; playwright-core + axe-core for the rendered audit.
 
-## Development
+## Commands
 
-Requires Node 22 or later.
+Node 22 or later.
 
 ```sh
 npm install
-npm run dev      # http://localhost:4321
-npm run check    # type-check .astro and .ts files
-npm run build    # static output in dist/
-npm run preview  # serve dist/ locally
+npm run dev          # http://localhost:4321
+npm run check        # type-check .astro and .ts
+npm test             # unit tests: pricing maths, catalog validation, code samples
+npm run build        # static output in dist/, plus the CSP meta tag
+npm run check:links  # internal links, anchors and external-host allowlist in dist/
+npm run audit        # rendered audit (needs Chromium; see below)
+npm run preview      # serve dist/ locally
 ```
+
+`npm run audit` serves `dist/` like GitHub Pages and checks every page at mobile, tablet and
+desktop widths for axe-core violations (WCAG 2.2 A/AA plus best practice), JavaScript errors,
+horizontal overflow and layout shift. Add `-- --shots ./shots` to save screenshots. It uses
+Playwright's Chromium (`npx playwright install chromium`) or `CHROMIUM_PATH`.
+
+CI (`.github/workflows/ci.yml` on pull requests, `deploy.yml` on `main`) runs check, tests,
+build and the link check. Deployment happens only from `main`.
 
 ## Structure
 
 ```
 src/
-  config/site.ts          URLs for the API, docs and dashboard, nav, contact address
-  data/models.json        sample model catalog (see "Model data")
-  data/faq.ts             FAQ copy for the home and pricing pages
-  lib/catalog.ts          catalog types, loading, normalisation, formatting
-  lib/estimate.ts         cost estimate maths, shared by server render and browser
-  components/             Header, Footer, Logo, RateTable, CodeTabs, RequestReceipt, …
-  pages/                  index, models, pricing, 404
-public/                   favicon, social image, robots.txt, CNAME
+  config/site.ts            URLs for the API, docs and dashboard; nav; contact address
+  data/sample-catalog.json  SAMPLE model catalog (see "Model catalog")
+  data/code-samples.ts      integration examples (syntax-checked by tests)
+  data/faq.ts               FAQ copy — confirmed or definitional statements only
+  lib/catalog-schema.ts     catalog contract, validation, normalisation (pure, tested)
+  lib/catalog.ts            loading policy and labels
+  lib/format.ts             every displayed rate, amount and token count
+  lib/estimate.ts           estimator maths and input validation (tested)
+  lib/receipt.ts            the hero's worked example (tested)
+  scripts/motion.ts         lazy GSAP loading and number tweens
+  components/  pages/       Astro components and routes (/, /models, /pricing, /legal/*, 404)
+scripts/                    csp.mjs, check-links.mjs, audit.mjs
+tests/                      Vitest unit tests
 ```
 
-## Model data
+## Model catalog
 
-Every page reads models through `getCatalog()` in `src/lib/catalog.ts`. At build time:
+All models and rates come from one place, `getCatalog()` in `src/lib/catalog.ts`, and every
+calculation uses `src/lib/estimate.ts`, `src/lib/receipt.ts` and `src/lib/format.ts`. Nothing else
+hard-codes a rate.
 
-1. If `PUBLIC_MODELS_API_URL` is set and the endpoint responds, the live catalog is used.
-2. Otherwise the build falls back to `src/data/models.json` and logs a warning.
+### Where the data comes from
 
-**`src/data/models.json` is sample data.** Model names, context windows and prices are realistic
-placeholders. Replace them with real data from the platform before launch, either by editing the
-file or by pointing `PUBLIC_MODELS_API_URL` at the live endpoint.
+| `PUBLIC_MODELS_API_URL` | Source | What visitors see |
+| --- | --- | --- |
+| unset | `src/data/sample-catalog.json` | "Sample rates" labels on every page with rates; neutral headings with no model counts |
+| unset, file has `"sample": false` | the bundled file, treated as confirmed | no sample labelling — set this only for confirmed data |
+| set, endpoint healthy | live catalog | rates as published |
+| set, endpoint down or invalid | — | **the build fails**; the previous deployment stays online |
 
-The expected response shape (`GET /api/models`):
-
-```jsonc
-{
-  "currency": "USD",
-  "providers": [{ "id": "anthropic", "name": "Anthropic" }],
-  "data": [
-    {
-      "id": "claude-sonnet-5-5",          // the value customers pass as `model`
-      "name": "Claude Sonnet 5.5",
-      "provider": "anthropic",            // provider id, or an inline { id, name } object
-      "tier": "balanced",                 // optional: flagship | balanced | efficient
-      "summary": "One-line description.",
-      "context_window": 1000000,
-      "max_output_tokens": 128000,
-      "input_modalities": ["text", "image"],
-      "features": ["tools", "reasoning", "caching", "json"],
-      "pricing": { "input": 2.0, "cached_input": 0.2, "output": 10.0 }  // USD per 1M tokens
-    }
-  ]
-}
-```
-
-`normalizeCatalog()` tolerates camelCase keys, a `models` array instead of `data`, `null` for
-`cached_input` (shown as "—"), and providers given inline. It skips any model without input and
-output prices, so the site never shows a model without a rate.
-
-The endpoint must be reachable from GitHub's build runners. Because the site is static, rates
-update when the site rebuilds. The workflow accepts a `repository_dispatch` event, so the
-platform can trigger a rebuild whenever the catalog changes:
+The site never falls back to sample prices when a live catalog was expected. Rates are read at
+build time, so they are only as fresh as the last build. The platform can trigger a rebuild:
 
 ```sh
 curl -X POST https://api.github.com/repos/GabrielMA1/beacon/dispatches \
@@ -97,46 +92,104 @@ curl -X POST https://api.github.com/repos/GabrielMA1/beacon/dispatches \
 
 That token belongs in the platform's secret store, never in this repository.
 
+**`src/data/sample-catalog.json` is sample data.** Model names, context windows and prices are
+placeholders compiled from public third-party sources that disagree with each other. None of it
+is a Gabnode price.
+
+### Response contract: `GET /api/models`
+
+The endpoint must be `https`, reachable from GitHub's runners, return `application/json`, and be
+under 2 MB. It is read with a 20-second timeout and redirects are refused.
+
+```jsonc
+{
+  "currency": "USD",                        // only USD is supported
+  "providers": [{ "id": "anthropic", "name": "Anthropic" }],
+  "data": [
+    {
+      "id": "claude-sonnet-5-5",            // exactly what the API accepts as `model`
+      "name": "Claude Sonnet 5.5",
+      "provider": "anthropic",              // a providers[].id, or an inline { "id", "name" }
+      "tier": "balanced",                   // optional: flagship | balanced | efficient
+      "summary": "One-line description.",   // optional, plain text, ≤ 240 chars shown
+      "context_window": 1000000,            // optional positive integer
+      "max_output_tokens": 128000,          // optional positive integer
+      "input_modalities": ["text", "image"],// optional; "image" implies the vision label
+      "features": ["tools", "reasoning", "json"],
+      "pricing": {                          // USD per 1M tokens, or null if not yet published
+        "input": 2.0,
+        "cached_input": 0.2,                // null or absent: the model has no cached-input rate
+        "output": 10.0
+      }
+    }
+  ]
+}
+```
+
+### Validation (`parseCatalog`)
+
+Errors (any error fails a live build):
+- not a JSON object, no `data`/`models` array, no valid models, or a currency other than USD;
+- a model `id` that is missing, duplicated, or not matching `^[a-z0-9][a-z0-9._:/-]{0,127}$`;
+- a missing name, or a provider that is not in `providers` and not given inline;
+- `pricing` that is not an object or `null`; `input`/`output` missing, negative, non-numeric,
+  non-finite or above 10,000; `cached_input` present but invalid.
+
+Warnings (logged, data still used):
+- `pricing: null` — listed as "Rates not yet published", excluded from the estimator, sorted last;
+- a cached-input rate higher than the input rate; unknown features or tiers (ignored).
+
+Normalisation: numbers or decimal strings accepted for rates; camelCase keys accepted; text is
+trimmed and length-capped and always rendered as text, never HTML. The "Cached input pricing"
+capability is derived from the presence of a cached-input rate, so the label can never disagree
+with the rate card.
+
+## Motion
+
+- **GSAP** (free standard licence) is used where orchestration earns its weight: re-pricing the hero
+  receipt when the model changes (interruptible number tweens and a short sequence), and re-ranking
+  the estimator's comparison list (Flip). It is fetched after the page is idle, only on those two
+  pages, and never for visitors who prefer reduced motion. Everything renders complete and
+  correct before any script runs.
+- Simple transitions (hover, bars, accordion icons) are CSS.
+- **Lenis was evaluated and not used.** This is a reference site: people scan prices, jump to
+  anchors and use the keyboard. Native scrolling does that best; CSS `scroll-behavior` covers
+  in-page anchors and is disabled for reduced motion.
+- **React Bits and 21st.dev were reviewed for ideas only.** Their components are React-based and
+  mostly decorative (WebGL backgrounds, cursor and text effects). The one idea adopted — counting a
+  value from old to new, as in React Bits' CountUp — is implemented in `src/scripts/motion.ts`
+  without React.
+
+## Security
+
+- Content-Security-Policy is added to every page as a `<meta>` tag by `scripts/csp.mjs`:
+  same-origin scripts plus hashes of each inline script; inline style attributes allowed (used by
+  the syntax highlighter). GitHub Pages cannot set headers, so `frame-ancestors` is unavailable.
+- `.env*` files are git-ignored except `.env.example`. Only `PUBLIC_*` values exist, and they are public.
+- Code samples use `YOUR_API_KEY` and an environment variable; tests reject anything key-shaped.
+- `npm run check:links` fails on links to unexpected external hosts or `http://` URLs.
+
 ## Deployment (GitHub Pages)
 
-`.github/workflows/deploy.yml` type-checks, builds and deploys on every push to `main`.
+One-time setup (repository settings, not code):
 
-One-time setup:
-
-1. **Settings → Pages → Build and deployment → Source:** GitHub Actions.
-2. **Settings → Pages → Custom domain:** `gabnode.com`, then enable **Enforce HTTPS**.
-   `public/CNAME` already contains the domain.
-3. DNS for the apex domain, at your DNS provider:
-   - `A` records for `gabnode.com` → `185.199.108.153`, `185.199.109.153`, `185.199.110.153`, `185.199.111.153`
-   - `AAAA` records → `2606:50c0:8000::153`, `2606:50c0:8001::153`, `2606:50c0:8002::153`, `2606:50c0:8003::153`
+1. **Settings → Pages → Source:** GitHub Actions.
+2. **Settings → Pages → Custom domain:** `gabnode.com`, then **Enforce HTTPS**. `public/CNAME` contains the domain.
+3. DNS at your provider:
+   - `A` for `gabnode.com` → `185.199.108.153`, `185.199.109.153`, `185.199.110.153`, `185.199.111.153`
+   - `AAAA` → `2606:50c0:8000::153`, `2606:50c0:8001::153`, `2606:50c0:8002::153`, `2606:50c0:8003::153`
    - `CNAME` for `www` → `gabrielma1.github.io`
-4. Optional: **Settings → Secrets and variables → Actions → Variables:** add
-   `PUBLIC_MODELS_API_URL`. Use a *variable*, not a secret; the value is a public URL.
+4. Optional: **Settings → Secrets and variables → Actions → Variables:** `PUBLIC_MODELS_API_URL`
+   (a variable, not a secret).
 
-Routes are generated as `/models/index.html` and so on, which GitHub Pages serves without
-rewrites. `404.html` is served for unknown paths.
-
-## Configuration
-
-Destinations and contact details are in `src/config/site.ts`:
-
-- `links.signup`: where "Get started" points. Currently the dashboard root. Change it once
-  the dashboard has a dedicated sign-up route.
-- `links.supportEmail`: currently `support@gabnode.com`. Make sure the mailbox exists.
-
-## Before launch
-
-- [ ] Replace the sample catalog with real models and rates.
-- [ ] Add Terms of Service and a Privacy Policy, and link them from the footer. Both are
-      needed before taking payments.
-- [ ] Confirm that `support@gabnode.com` receives mail.
-- [ ] Check that the client list on the home page (`clients` in `src/pages/index.astro`)
-      matches clients you have verified against the API.
-- [ ] Check that the documentation topics listed on the home page exist at docs.gabnode.com.
+Pages are generated as `/models/index.html` etc. and served without rewrites; unknown paths get
+`404.html`. Asset URLs are root-relative, so the site must be served from the domain root
+(gabnode.com), not from `gabrielma1.github.io/beacon/`.
 
 ## Content principles
 
 - Gabnode is presented as an infrastructure provider, not a marketplace.
-- No claims of partnership or affiliation with model providers. Use wording like
-  "models available through Gabnode". The footer carries a trademark notice.
-- No unverifiable savings claims. Show rates and let customers compare.
+- No claims of partnership or affiliation with model providers; the footer carries a trademark notice.
+- No savings, uptime, latency or capacity claims. Show rates and let customers compare.
+- No product or billing policy on the site until the platform confirms it (see LAUNCH.md).
+- Sample data is always labelled as sample data.

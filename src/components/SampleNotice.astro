@@ -1,0 +1,61 @@
+---
+/**
+ * Shown wherever rates appear while the site is built from the sample
+ * catalog. Renders nothing once a live catalog is configured.
+ */
+import type { CatalogSource } from '../lib/catalog-schema';
+
+interface Props {
+  source: CatalogSource;
+  /** "inline" sits in running text; "block" stands on its own */
+  variant?: 'block' | 'inline';
+  class?: string;
+}
+const { source, variant = 'block', class: className } = Astro.props;
+---
+{source === 'sample' && (
+  variant === 'inline' ? (
+    <span class:list={['sample-tag', className]}>Sample rates</span>
+  ) : (
+    <aside class:list={['sample-note', className]} aria-label="About these rates">
+      <span class="sample-tag">Sample rates</span>
+      <p>
+        The models and prices shown here are illustrative placeholders while Gabnode’s launch catalog is finalised.
+        They are not current prices and are not what your account will be charged.
+      </p>
+    </aside>
+  )
+)}
+
+<style>
+  .sample-tag {
+    display: inline-flex;
+    align-items: center;
+    flex: none;
+    padding: 0.15rem 0.5rem;
+    border: 1px solid var(--accent-text);
+    color: var(--accent-text);
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    line-height: 1.4;
+    white-space: nowrap;
+  }
+
+  .sample-note {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.5rem 1rem;
+    padding: 0.85rem 1rem;
+    border-left: 2px solid var(--accent-text);
+    background: color-mix(in srgb, var(--sheet) 70%, transparent);
+    font-size: var(--fs-small);
+    color: var(--fg-2);
+  }
+
+  .sample-note p {
+    flex: 1 1 20rem;
+    max-width: 52em;
+  }
+</style>

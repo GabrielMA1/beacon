@@ -1,16 +1,20 @@
 ---
 import Base from '../layouts/Base.astro';
 import FinalCta from '../components/FinalCta.astro';
-import { getCatalog, featureLabels, tierLabels, formatRate, formatTokens, type FeatureId } from '../lib/catalog';
+import SampleNotice from '../components/SampleNotice.astro';
+import { getCatalog, featureLabels, tierLabels, FEATURES } from '../lib/catalog';
+import { formatRate, formatTokens } from '../lib/format';
 
-const { models, providers } = await getCatalog();
+const catalog = await getCatalog();
+const { models, providers } = catalog;
+const isSample = catalog.source === 'sample';
 
-const featureOrder: FeatureId[] = ['tools', 'reasoning', 'vision', 'caching', 'json'];
+const featureOrder = FEATURES;
 const modalityLabel = (m: string[]) => m.map((x) => x[0].toUpperCase() + x.slice(1)).join(', ');
 ---
 <Base
   title="Models"
-  description={`Compare ${models.length} AI models available through Gabnode, from ${providers
+  description={`Compare ${isSample ? '' : `${models.length} `}AI models available through Gabnode, from ${providers
     .slice(0, 4)
     .map((p) => p.name)
     .join(', ')} and more: context windows, capabilities and per-token rates.`}
@@ -18,11 +22,14 @@ const modalityLabel = (m: string[]) => m.map((x) => x[0].toUpperCase() + x.slice
   <section class="page-head">
     <div class="wrap grid">
       <p class="label page-head__label">Models</p>
-      <h1 class="h1 page-head__title">{models.length} models from {providers.length} providers. One&nbsp;API.</h1>
+      <h1 class="h1 page-head__title">
+        {isSample ? <>Models and rates. One&nbsp;API.</> : <>{models.length} models from {providers.length} providers. One&nbsp;API.</>}
+      </h1>
       <p class="lede page-head__lede">
         Compare context windows, capabilities and per-token rates. To use a model, pass its ID as
         the <code>model</code> parameter.
       </p>
+      <SampleNotice source={catalog.source} class="page-head__note" />
     </div>
   </section>
 
@@ -67,7 +74,7 @@ const modalityLabel = (m: string[]) => m.map((x) => x[0].toUpperCase() + x.slice
 
       <div class="catalog__status" data-requires-js>
         <p aria-live="polite" data-count>Showing all {models.length} models</p>
-        <p class="small faint">Prices in USD per 1 million tokens</p>
+        <p class="small faint">{isSample ? 'Sample rates, ' : 'Rates '}in US dollars per 1 million tokens</p>
       </div>
 
       <ol class="catalog__list" role="list" data-list>
@@ -79,8 +86,8 @@ const modalityLabel = (m: string[]) => m.map((x) => x[0].toUpperCase() + x.slice
             data-features={m.features.join(' ')}
             data-search={`${m.name} ${m.id} ${m.provider.name}`.toLowerCase()}
             data-name={m.name}
-            data-input={m.pricing.input}
-            data-output={m.pricing.output}
+            data-input={m.pricing?.input ?? ''}
+            data-output={m.pricing?.output ?? ''}
             data-context={m.contextWindow ?? 0}
             data-index={i}
           >
@@ -105,11 +112,22 @@ const modalityLabel = (m: string[]) => m.map((x) => x[0].toUpperCase() + x.slice
               <div><dt>Input</dt><dd>{modalityLabel(m.inputModalities)}</dd></div>
             </dl>
 
-            <dl class="mrow__rates">
-              <div><dt>Input</dt><dd>{formatRate(m.pricing.input)}</dd></div>
-              <div><dt>Cached input</dt><dd>{formatRate(m.pricing.cachedInput)}</dd></div>
-              <div><dt>Output</dt><dd>{formatRate(m.pricing.output)}</dd></div>
-            </dl>
+            {m.pricing ? (
+              <dl class="mrow__rates" aria-label={`${isSample ? 'Sample rates' : 'Rates'} per 1M tokens`}>
+                <div><dt>Input</dt><dd>{formatRate(m.pricing.input)}</dd></div>
+                <div>
+                  <dt>Cached input</dt>
+                  <dd>
+                    {m.pricing.cachedInput === null
+                      ? <span class="mrow__none">No cached rate</span>
+                      : formatRate(m.pricing.cachedInput)}
+                  </dd>
+                </div>
+                <div><dt>Output</dt><dd>{formatRate(m.pricing.output)}</dd></div>
+              </dl>
+            ) : (
+              <p class="mrow__rates mrow__unpriced">Rates not yet published</p>
+            )}
 
             <ul class="mrow__features" role="list" aria-label="Capabilities">
               {featureOrder.filter((f) => m.features.includes(f)).map((f) => <li>{featureLabels[f]}</li>)}
@@ -124,8 +142,10 @@ const modalityLabel = (m: string[]) => m.map((x) => x[0].toUpperCase() + x.slice
       </div>
 
       <p class="catalog__note small faint">
-        Model availability and rates can change. Applications should read the current list from
-        <code>GET /v1/models</code>. Model names are trademarks of their respective owners.
+        {isSample
+          ? 'This page shows a provisional sample catalog. Models and rates will be confirmed before launch. '
+          : 'Model availability and rates can change; this page reflects the catalog when the site was last published. '}
+        Model names are trademarks of their respective owners. Listing a model does not imply any affiliation with its developer.
       </p>
     </div>
   </section>
@@ -141,12 +161,15 @@ const modalityLabel = (m: string[]) => m.map((x) => x[0].toUpperCase() + x.slice
 
   if (form && list && count && empty) {
     const rows = [...list.querySelectorAll<HTMLLIElement>('.mrow')];
+    // Models without published rates sort after every priced model.
+    const price = (v: string | undefined) => (v ? Number(v) : Number.POSITIVE_INFINITY);
+    const byNumber = (x: number, y: number) => (x === y ? 0 : x - y);
     const total = rows.length;
 
     const sorters: Record<string, (a: HTMLElement, b: HTMLElement) => number> = {
       default: (a, b) => +a.dataset.index! - +b.dataset.index!,
-      input: (a, b) => +a.dataset.input! - +b.dataset.input!,
-      output: (a, b) => +a.dataset.output! - +b.dataset.output!,
+      input: (a, b) => byNumber(price(a.dataset.input), price(b.dataset.input)),
+      output: (a, b) => byNumber(price(a.dataset.output), price(b.dataset.output)),
       context: (a, b) => +b.dataset.context! - +a.dataset.context!,
       name: (a, b) => a.dataset.name!.localeCompare(b.dataset.name!),
     };
@@ -208,7 +231,8 @@ const modalityLabel = (m: string[]) => m.map((x) => x[0].toUpperCase() + x.slice
 
   .page-head__label,
   .page-head__title,
-  .page-head__lede {
+  .page-head__lede,
+  .page-head :global(.page-head__note) {
     grid-column: 1 / -1;
   }
 
@@ -222,7 +246,8 @@ const modalityLabel = (m: string[]) => m.map((x) => x[0].toUpperCase() + x.slice
       padding-top: 0.8em;
     }
     .page-head__title,
-    .page-head__lede {
+    .page-head__lede,
+    .page-head :global(.page-head__note) {
       grid-column: 4 / -1;
     }
   }
@@ -315,15 +340,7 @@ const modalityLabel = (m: string[]) => m.map((x) => x[0].toUpperCase() + x.slice
     }
   }
 
-  @media (min-width: 1200px) {
-    .filters {
-      grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1.2fr) auto;
-      align-items: end;
-    }
-    .filters__caps {
-      grid-column: auto;
-    }
-  }
+
 
   .catalog__status {
     display: flex;
@@ -346,7 +363,6 @@ const modalityLabel = (m: string[]) => m.map((x) => x[0].toUpperCase() + x.slice
     gap: 1.25rem var(--col-gap);
     padding-block: 1.75rem;
     border-bottom: 1px solid var(--rule);
-    scroll-margin-top: calc(var(--header-h) + 1rem);
   }
 
   .mrow:target {
@@ -435,6 +451,18 @@ const modalityLabel = (m: string[]) => m.map((x) => x[0].toUpperCase() + x.slice
     font-size: 1.125rem;
     font-weight: 560;
     letter-spacing: -0.01em;
+  }
+
+  .mrow__none {
+    font-size: var(--fs-small);
+    font-weight: 400;
+    color: var(--ink-3);
+  }
+
+  .mrow__unpriced {
+    display: block;
+    font-size: var(--fs-small);
+    color: var(--ink-3);
   }
 
   .mrow__features {

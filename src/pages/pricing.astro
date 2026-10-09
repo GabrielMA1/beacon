@@ -4,20 +4,19 @@ import SectionHead from '../components/SectionHead.astro';
 import RateTable from '../components/RateTable.astro';
 import Faq from '../components/Faq.astro';
 import FinalCta from '../components/FinalCta.astro';
-import { getCatalog } from '../lib/catalog';
-import { estimate, presets, formatUsd, describeLine, type RateRow } from '../lib/estimate';
+import SampleNotice from '../components/SampleNotice.astro';
+import { getCatalog, isPriced } from '../lib/catalog';
+import { estimate, presets, describeLine, toRateRow, MAX_TOKENS_M } from '../lib/estimate';
+import { formatUsd } from '../lib/format';
 import { faqs } from '../data/faq';
 
-const { models, providers } = await getCatalog();
+const catalog = await getCatalog();
+const { models, providers } = catalog;
+const isSample = catalog.source === 'sample';
+const rateWord = isSample ? 'sample' : 'published';
 
-const rates: RateRow[] = models.map((m) => ({
-  id: m.id,
-  name: m.name,
-  provider: m.provider.name,
-  input: m.pricing.input,
-  cached: m.pricing.cachedInput,
-  output: m.pricing.output,
-}));
+// The estimator only offers models with published rates.
+const rates = models.filter(isPriced).map(toRateRow);
 
 const defaultRate = rates.find((r) => r.id === 'claude-sonnet-5-5') ?? rates[0];
 const defaultPreset = presets[0];
@@ -25,26 +24,33 @@ const initial = estimate(defaultRate, defaultPreset.workload);
 const compare = rates
   .map((r) => ({ r, total: estimate(r, defaultPreset.workload).total }))
   .sort((a, b) => a.total - b.total);
-const maxTotal = Math.max(...compare.map((c) => c.total));
+const maxTotal = Math.max(...compare.map((c) => c.total)) || 1;
 
 const billingSteps = [
   { title: 'Add balance', body: 'Top up your account in the dashboard. Your balance is shared by every model and every API key.' },
-  { title: 'Make requests', body: 'Each request is priced from its input, cached input and output tokens at the model’s published rate.' },
-  { title: 'See every charge', body: 'The cost is deducted from your balance and recorded in your usage history, by model.' },
+  { title: 'Make requests', body: 'Each request is priced from its input, cached input and output tokens at the model’s rate.' },
+  { title: 'Review usage', body: 'Charges are deducted from your balance, and your usage history in the dashboard breaks them down by model.' },
+];
+
+const fields = [
+  { name: 'input', label: 'Input tokens per month', unit: 'millions', value: defaultPreset.workload.inputM, max: MAX_TOKENS_M },
+  { name: 'output', label: 'Output tokens per month', unit: 'millions', value: defaultPreset.workload.outputM, max: MAX_TOKENS_M },
+  { name: 'cached', label: 'Share of input from cache', unit: '%', value: defaultPreset.workload.cachedPct, max: 100 },
 ];
 ---
 <Base
   title="Pricing"
-  description="Transparent per-token pricing for every model available through Gabnode. Prepaid balance, input, cached input and output rates, and a cost estimator."
+  description="Per-token pricing for models available through Gabnode: a prepaid balance, separate input, cached input and output rates, and a cost estimator."
 >
   <section class="page-head">
     <div class="wrap grid">
       <p class="label page-head__label">Pricing</p>
       <h1 class="h1 page-head__title">Pay per token, from one prepaid balance.</h1>
       <p class="lede page-head__lede">
-        Add balance once and use it with any model. Every request is charged at that model’s published rate, and
-        your usage history shows exactly what it cost.
+        Add balance once and use it with any model. Usage is charged at each model’s rate, and the dashboard shows
+        what you spent on each model.
       </p>
+      <SampleNotice source={catalog.source} class="page-head__note" />
     </div>
   </section>
 
@@ -67,7 +73,7 @@ const billingSteps = [
   <section class="section" id="rates" aria-labelledby="rates-title">
     <div class="wrap">
       <SectionHead label="Rate card" id="rates-title">
-        Rates for all {models.length} models.
+        {isSample ? 'Sample rate card.' : `Rates for all ${models.length} models.`}
         <Fragment slot="lede">
           Input, cached input and output tokens are priced separately, because they cost different amounts to serve.
           All prices are in US dollars per million tokens.
@@ -75,7 +81,11 @@ const billingSteps = [
       </SectionHead>
       <div class="grid">
         <div class="rates-wrap">
-          <RateTable models={models} grouped caption="Rates for every model, grouped by provider, in US dollars per million tokens" />
+          <RateTable
+            models={models}
+            grouped
+            caption={`${isSample ? 'Sample rates' : 'Rates'} for every model, grouped by provider, in US dollars per million tokens`}
+          />
         </div>
       </div>
     </div>
@@ -87,13 +97,13 @@ const billingSteps = [
       <SectionHead label="Estimate" id="estimate-title">
         What would a month cost?
         <Fragment slot="lede">
-          Describe your usage and compare the same workload across every model. Estimates use published rates;
-          your actual bill depends on real token counts.
+          Describe your usage and compare the same workload across every model, at {rateWord} rates. This is an
+          estimate: actual charges are calculated by Gabnode from the tokens each request uses.
         </Fragment>
       </SectionHead>
 
       <div class="grid est" data-estimator data-rates={JSON.stringify(rates)}>
-        <form class="est__form" data-est-form>
+        <form class="est__form" data-est-form novalidate>
           <fieldset class="est__presets" data-requires-js>
             <legend>Start from an example</legend>
             <div>
@@ -117,34 +127,41 @@ const billingSteps = [
           <label class="field">
             <span>Model</span>
             <select class="select" name="model">
-              {providers.map((p) => (
-                <optgroup label={p.name}>
-                  {rates.filter((r) => r.provider === p.name).map((r) => (
-                    <option value={r.id} selected={r.id === defaultRate.id}>{r.name}</option>
-                  ))}
-                </optgroup>
-              ))}
+              {providers.map((p) => {
+                const group = rates.filter((r) => r.provider === p.name);
+                return group.length > 0 && (
+                  <optgroup label={p.name}>
+                    {group.map((r) => <option value={r.id} selected={r.id === defaultRate.id}>{r.name}</option>)}
+                  </optgroup>
+                );
+              })}
             </select>
           </label>
 
           <div class="est__nums">
-            <label class="field">
-              <span>Input tokens per month (millions)</span>
-              <input class="input" type="number" name="input" min="0" step="any" inputmode="decimal" value={defaultPreset.workload.inputM} />
-            </label>
-            <label class="field">
-              <span>Output tokens per month (millions)</span>
-              <input class="input" type="number" name="output" min="0" step="any" inputmode="decimal" value={defaultPreset.workload.outputM} />
-            </label>
-            <label class="field">
-              <span>Input served from cache (%)</span>
-              <input class="input" type="number" name="cached" min="0" max="100" step="1" inputmode="numeric" value={defaultPreset.workload.cachedPct} />
-            </label>
+            {fields.map((f) => (
+              <div class="field">
+                <label for={`est-${f.name}`}>{f.label} <span class="faint">({f.unit})</span></label>
+                <input
+                  class="input"
+                  id={`est-${f.name}`}
+                  type="number"
+                  name={f.name}
+                  min="0"
+                  max={f.max}
+                  step="any"
+                  inputmode="decimal"
+                  value={f.value}
+                  aria-describedby={`est-${f.name}-msg`}
+                />
+                <p class="field__msg" id={`est-${f.name}-msg`} data-msg={f.name}></p>
+              </div>
+            ))}
           </div>
           <noscript><p class="small faint">The estimator needs JavaScript. The figures shown are for the example workload.</p></noscript>
         </form>
 
-        <div class="est__result" aria-live="polite">
+        <div class="est__result">
           <div class="est__sheet">
             <p class="est__sheet-head">
               <span>Estimated monthly cost</span>
@@ -157,15 +174,22 @@ const billingSteps = [
                     {l.label}
                     <small data-out="detail">{describeLine(l)}</small>
                   </dt>
-                  <dd data-out="cost">{formatUsd(l.cost)}</dd>
+                  <dd data-out="cost" data-value={l.cost}>{formatUsd(l.cost)}</dd>
                 </div>
               ))}
             </dl>
             <p class="est__total">
-              <span>Total</span>
-              <strong data-out="total">{formatUsd(initial.total)}</strong>
+              <span>Estimate</span>
+              <strong data-out="total" data-value={initial.total}>{formatUsd(initial.total)}</strong>
             </p>
+            <p class="est__invalid" data-invalid hidden>Correct the highlighted fields to see an estimate.</p>
+            <p class="est__fine">
+              {isSample ? 'Sample rates, for illustration only. ' : ''}Excludes any taxes. Real token counts depend on
+              each model’s tokenizer and on how much of your input is actually served from cache.
+            </p>
+            <SampleNotice source={catalog.source} variant="inline" class="est__stamp" />
           </div>
+          <p class="visually-hidden" role="status" data-announce></p>
         </div>
 
         <div class="est__compare">
@@ -174,8 +198,8 @@ const billingSteps = [
             {compare.map(({ r, total }) => (
               <li class:list={['cmp__row', { 'is-selected': r.id === defaultRate.id }]} data-id={r.id}>
                 <span class="cmp__name">{r.name} <span class="faint">{r.provider}</span></span>
-                <span class="cmp__cost">{formatUsd(total)}</span>
-                <span class="cmp__bar" style={`--w:${(total / maxTotal).toFixed(4)}`} aria-hidden="true"></span>
+                <span class="cmp__cost" data-value={total}>{formatUsd(total)}</span>
+                <span class="cmp__bar" aria-hidden="true"><span style={`transform:scaleX(${(total / maxTotal).toFixed(4)})`}></span></span>
               </li>
             ))}
           </ol>
@@ -200,7 +224,9 @@ const billingSteps = [
 </Base>
 
 <script>
-  import { estimate, formatUsd, describeLine, type RateRow } from '../lib/estimate';
+  import { estimate, describeLine, readWorkload, type RateRow, type WorkloadField } from '../lib/estimate';
+  import { formatUsd } from '../lib/format';
+  import { loadGsap, motion, reducedMotion, stopTween, tweenNumber, warmGsap } from '../scripts/motion';
 
   const root = document.querySelector<HTMLElement>('[data-estimator]');
   const form = root?.querySelector<HTMLFormElement>('[data-est-form]');
@@ -211,45 +237,90 @@ const billingSteps = [
     const compareRows = new Map(
       [...compareList.querySelectorAll<HTMLLIElement>('[data-id]')].map((li) => [li.dataset.id!, li]),
     );
-    const field = (name: string) => form.elements.namedItem(name) as HTMLInputElement;
+    const input = (name: string) => form.elements.namedItem(name) as HTMLInputElement;
+    const announce = root.querySelector<HTMLElement>('[data-announce]')!;
+    const invalidNote = root.querySelector<HTMLElement>('[data-invalid]')!;
+    const totalEl = root.querySelector<HTMLElement>('[data-out="total"]')!;
+    const sheet = root.querySelector<HTMLElement>('.est__sheet')!;
+
+    // GSAP Flip animates the comparison list when its order changes.
+    let Flip: any = null;
+    warmGsap();
+    if (!reducedMotion()) {
+      loadGsap().then(async (g) => {
+        if (!g) return;
+        const mod = await import('gsap/Flip');
+        g.registerPlugin(mod.Flip);
+        Flip = mod.Flip;
+      });
+    }
+
+    let announceTimer: number | undefined;
 
     const render = () => {
-      const workload = {
-        inputM: parseFloat(field('input').value) || 0,
-        outputM: parseFloat(field('output').value) || 0,
-        cachedPct: parseFloat(field('cached').value) || 0,
-      };
-      const selected = (form.elements.namedItem('model') as HTMLSelectElement).value;
-      const rate = rates.find((r) => r.id === selected) ?? rates[0];
-      const est = estimate(rate, workload);
+      const { workload, errors } = readWorkload({
+        input: input('input').value,
+        output: input('output').value,
+        cached: input('cached').value,
+      });
+      const rate = rates.find((r) => r.id === (form.elements.namedItem('model') as HTMLSelectElement).value) ?? rates[0];
+
+      // Field messages: errors first, then the cache hint for models without a cached rate.
+      for (const name of ['input', 'output', 'cached'] as WorkloadField[]) {
+        const msg = form.querySelector<HTMLElement>(`[data-msg="${name}"]`)!;
+        const error = errors[name];
+        input(name).setAttribute('aria-invalid', String(!!error));
+        msg.classList.toggle('is-error', !!error);
+        msg.textContent =
+          error ?? (name === 'cached' && rate.cached === null ? `${rate.name} has no cached-input rate, so this share does not apply.` : '');
+      }
 
       root.querySelector('[data-out="model"]')!.textContent = rate.id;
+      sheet.classList.toggle('is-invalid', !workload);
+      invalidNote.hidden = !!workload;
+
+      if (!workload) {
+        root.querySelectorAll<HTMLElement>('[data-out="cost"], [data-out="total"], .cmp__cost').forEach((el) => {
+          stopTween(el);
+          el.textContent = '—';
+        });
+        return;
+      }
+
+      const est = estimate(rate, workload);
       for (const line of est.lines) {
         const el = root.querySelector(`[data-line="${line.key}"]`);
         if (!el) continue;
         el.querySelector('[data-out="detail"]')!.textContent = describeLine(line);
-        el.querySelector('[data-out="cost"]')!.textContent = formatUsd(line.cost);
+        tweenNumber(el.querySelector<HTMLElement>('[data-out="cost"]')!, line.cost, formatUsd, 0.35);
       }
-      root.querySelector('[data-out="total"]')!.textContent = formatUsd(est.total);
+      tweenNumber(totalEl, est.total, formatUsd, 0.45);
 
       const totals = rates.map((r) => ({ id: r.id, total: estimate(r, workload).total })).sort((a, b) => a.total - b.total);
       const max = Math.max(...totals.map((t) => t.total)) || 1;
+      const state = Flip?.getState([...compareRows.values()]);
       for (const t of totals) {
         const li = compareRows.get(t.id);
         if (!li) continue;
-        li.querySelector('.cmp__cost')!.textContent = formatUsd(t.total);
-        li.style.setProperty('--w', (t.total / max).toFixed(4));
+        tweenNumber(li.querySelector<HTMLElement>('.cmp__cost')!, t.total, formatUsd, 0.35);
+        li.querySelector<HTMLElement>('.cmp__bar > span')!.style.transform = `scaleX(${(t.total / max).toFixed(4)})`;
         li.classList.toggle('is-selected', t.id === rate.id);
         compareList.appendChild(li);
       }
+      if (state && motion()) Flip.from(state, { duration: 0.45, ease: 'power2.inOut' });
+
+      clearTimeout(announceTimer);
+      announceTimer = window.setTimeout(() => {
+        announce.textContent = `Estimated ${formatUsd(est.total)} a month on ${rate.name}.`;
+      }, 700);
     };
 
     form.addEventListener('change', (e) => {
       const t = e.target as HTMLInputElement;
       if (t.name === 'preset') {
-        field('input').value = t.dataset.input!;
-        field('output').value = t.dataset.output!;
-        field('cached').value = t.dataset.cached!;
+        input('input').value = t.dataset.input!;
+        input('output').value = t.dataset.output!;
+        input('cached').value = t.dataset.cached!;
       }
       render();
     });
@@ -258,8 +329,8 @@ const billingSteps = [
       const t = e.target as HTMLInputElement;
       if (['input', 'output', 'cached'].includes(t.name)) {
         form.querySelectorAll<HTMLInputElement>('[name="preset"]').forEach((p) => (p.checked = false));
+        render();
       }
-      render();
     });
 
     form.addEventListener('submit', (e) => e.preventDefault());
@@ -278,7 +349,8 @@ const billingSteps = [
 
   .page-head__label,
   .page-head__title,
-  .page-head__lede {
+  .page-head__lede,
+  .page-head :global(.page-head__note) {
     grid-column: 1 / -1;
   }
 
@@ -292,14 +364,15 @@ const billingSteps = [
       padding-top: 0.8em;
     }
     .page-head__title,
-    .page-head__lede {
+    .page-head__lede,
+    .page-head :global(.page-head__note) {
       grid-column: 4 / -1;
     }
   }
 
   /* Billing steps */
   .billing {
-    padding-bottom: var(--section);
+    padding-bottom: 0;
   }
 
   .billing__steps {
@@ -431,6 +504,7 @@ const billingSteps = [
   }
 
   .est__sheet {
+    position: relative;
     padding: 1.5rem;
     background: var(--sheet);
     box-shadow:
@@ -496,6 +570,52 @@ const billingSteps = [
     grid-column: 1 / -1;
   }
 
+  .est__sheet :global(.est__stamp) {
+    position: absolute;
+    top: -0.8rem;
+    right: 1.25rem;
+    background: var(--sheet);
+  }
+
+  .est__invalid {
+    margin-top: 0.75rem;
+    font-size: var(--fs-small);
+    font-weight: 500;
+    color: var(--signal-text);
+  }
+
+  .est__sheet.is-invalid .est__total strong {
+    color: var(--ink-3);
+  }
+
+  .est__fine {
+    margin-top: 1rem;
+    padding-top: 0.85rem;
+    border-top: 1px solid var(--rule);
+    font-size: var(--fs-micro);
+    color: var(--ink-3);
+  }
+
+  .field__msg {
+    min-height: 0;
+    font-size: var(--fs-micro);
+    color: var(--ink-2);
+  }
+
+  .field__msg:empty {
+    display: none;
+  }
+
+  .field__msg.is-error {
+    color: var(--signal-text);
+    font-weight: 500;
+  }
+
+  .field .input[aria-invalid='true'] {
+    border-color: var(--signal-text);
+    box-shadow: inset 0 -1px 0 var(--signal-text);
+  }
+
   .est__compare-title {
     margin-bottom: 1rem;
     font-size: var(--fs-small);
@@ -528,7 +648,15 @@ const billingSteps = [
     grid-column: 1 / -1;
     height: 2px;
     margin-top: 0.45rem;
-    background: linear-gradient(to right, var(--ink-3) max(2px, calc(var(--w) * 100%)), transparent 0);
+  }
+
+  .cmp__bar > span {
+    display: block;
+    height: 100%;
+    min-width: 2px;
+    background: var(--ink-3);
+    transform-origin: left center;
+    transition: transform 0.45s var(--ease);
   }
 
   .cmp__row.is-selected {
@@ -546,9 +674,10 @@ const billingSteps = [
     vertical-align: 0.08em;
   }
 
-  .cmp__row.is-selected .cmp__bar {
-    background: linear-gradient(to right, var(--ink) max(2px, calc(var(--w) * 100%)), transparent 0);
+  .cmp__row.is-selected .cmp__bar > span {
+    background: var(--ink);
   }
+
 
   @media (min-width: 720px) {
     .est__nums {

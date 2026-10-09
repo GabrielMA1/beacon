@@ -1,0 +1,35 @@
+name: CI
+
+# Same checks as the deploy workflow, for pull requests. Never deploys.
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Type-check
+        run: npm run check
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Build
+        run: npm run build
+        env:
+          PUBLIC_MODELS_API_URL: ${{ vars.PUBLIC_MODELS_API_URL }}
+
+      - name: Check links
+        run: npm run check:links

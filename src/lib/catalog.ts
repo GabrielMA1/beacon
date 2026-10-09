@@ -1,58 +1,28 @@
 /**
- * Model catalog: types, loading and formatting.
+ * Model catalog for the site: loading and labels.
  *
- * The site is built from a catalog shaped like the planned `GET /api/models`
- * response. At build time we use the live endpoint when PUBLIC_MODELS_API_URL
- * is set and reachable, otherwise the bundled sample in src/data/models.json.
- * Every page and component reads models through `getCatalog()`, so swapping
- * the source never touches markup.
+ * Source of truth, decided once at build time:
+ *
+ * - PUBLIC_MODELS_API_URL unset → the bundled catalog
+ *   (src/data/sample-catalog.json). It is treated as SAMPLE data, and every
+ *   page that shows models or rates says so, unless the file explicitly sets
+ *   "sample": false — a deliberate statement that its rates are confirmed.
+ * - PUBLIC_MODELS_API_URL set → the live catalog. If it cannot be fetched or
+ *   fails validation, the BUILD FAILS. We never substitute sample prices for
+ *   a live catalog that was expected, and a failed build leaves the
+ *   previous deployment online.
  */
-import sample from '../data/models.json';
+import sample from '../data/sample-catalog.json';
+import { parseCatalog, type Catalog, type FeatureId, type Tier } from './catalog-schema';
 
-export type FeatureId = 'tools' | 'reasoning' | 'caching' | 'json' | 'vision';
-export type Tier = 'flagship' | 'balanced' | 'efficient';
-
-export interface Provider {
-  id: string;
-  name: string;
-}
-
-export interface ModelPricing {
-  /** USD per 1M input tokens */
-  input: number;
-  /** USD per 1M cached input tokens, or null when the model has no cache pricing */
-  cachedInput: number | null;
-  /** USD per 1M output tokens */
-  output: number;
-}
-
-export interface Model {
-  id: string;
-  name: string;
-  provider: Provider;
-  tier: Tier | null;
-  summary: string;
-  contextWindow: number | null;
-  maxOutputTokens: number | null;
-  inputModalities: string[];
-  features: FeatureId[];
-  pricing: ModelPricing;
-}
-
-export interface Catalog {
-  currency: string;
-  providers: Provider[];
-  models: Model[];
-  /** True when built from the bundled sample rather than the live API. */
-  isSample: boolean;
-}
+export * from './catalog-schema';
 
 export const featureLabels: Record<FeatureId, string> = {
   tools: 'Tool calling',
   reasoning: 'Reasoning',
-  caching: 'Prompt caching',
-  json: 'Structured output',
   vision: 'Image input',
+  caching: 'Cached input pricing',
+  json: 'Structured output',
 };
 
 export const tierLabels: Record<Tier, string> = {
@@ -61,83 +31,8 @@ export const tierLabels: Record<Tier, string> = {
   efficient: 'Fast, low cost',
 };
 
-/* ------------------------------------------------------------------ */
-/* Normalisation                                                       */
-/* ------------------------------------------------------------------ */
-
-type Raw = Record<string, any>;
-
-const num = (v: unknown): number | null => {
-  if (v === null || v === undefined || v === '') return null;
-  const n = typeof v === 'string' ? parseFloat(v) : (v as number);
-  return Number.isFinite(n) ? n : null;
-};
-
-const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '');
-
-/**
- * Accepts the sample file or an API payload. Tolerates snake_case or
- * camelCase keys, `data` or `models` arrays, and providers given either as
- * ids (with a separate `providers` list) or as inline objects.
- */
-export function normalizeCatalog(raw: Raw, isSample = false): Catalog {
-  const list: Raw[] = raw.data ?? raw.models ?? [];
-  const providerIndex = new Map<string, Provider>();
-
-  for (const p of raw.providers ?? []) {
-    if (p?.id) providerIndex.set(p.id, { id: String(p.id), name: String(p.name ?? p.id) });
-  }
-
-  const models: Model[] = [];
-  for (const m of list) {
-    if (!m?.id) continue;
-    const p = m.provider ?? m.owned_by ?? 'other';
-    const providerId = typeof p === 'string' ? p : String(p.id ?? p.name ?? 'other');
-    let provider = providerIndex.get(providerId) ?? providerIndex.get(slug(providerId));
-    if (!provider) {
-      provider = { id: slug(providerId), name: typeof p === 'object' && p.name ? String(p.name) : providerId };
-      providerIndex.set(provider.id, provider);
-    }
-
-    const pr = m.pricing ?? {};
-    const input = num(pr.input ?? pr.prompt);
-    const output = num(pr.output ?? pr.completion);
-    if (input === null || output === null) continue; // never show a model without a rate
-
-    const modalities: string[] = m.input_modalities ?? m.inputModalities ?? ['text'];
-    const features = new Set<FeatureId>((m.features ?? []).filter((f: string) => f in featureLabels));
-    if (modalities.includes('image')) features.add('vision');
-
-    models.push({
-      id: String(m.id),
-      name: String(m.name ?? m.display_name ?? m.id),
-      provider,
-      tier: (['flagship', 'balanced', 'efficient'] as const).includes(m.tier) ? m.tier : null,
-      summary: String(m.summary ?? m.description ?? ''),
-      contextWindow: num(m.context_window ?? m.contextWindow),
-      maxOutputTokens: num(m.max_output_tokens ?? m.maxOutputTokens),
-      inputModalities: modalities,
-      features: [...features],
-      pricing: {
-        input,
-        output,
-        cachedInput: num(pr.cached_input ?? pr.cachedInput ?? pr.cache_read),
-      },
-    });
-  }
-
-  // Keep provider order from the payload; drop providers with no models.
-  const used = new Set(models.map((m) => m.provider.id));
-  const providers = [...providerIndex.values()].filter((p) => used.has(p.id));
-  const order = new Map(providers.map((p, i) => [p.id, i]));
-  models.sort((a, b) => order.get(a.provider.id)! - order.get(b.provider.id)!);
-
-  return { currency: String(raw.currency ?? 'USD'), providers, models, isSample };
-}
-
-/* ------------------------------------------------------------------ */
-/* Loading                                                             */
-/* ------------------------------------------------------------------ */
+const FETCH_TIMEOUT_MS = 20_000;
+const MAX_BYTES = 2_000_000;
 
 let cached: Promise<Catalog> | undefined;
 
@@ -147,41 +42,56 @@ export function getCatalog(): Promise<Catalog> {
 }
 
 async function load(): Promise<Catalog> {
-  const url = import.meta.env.PUBLIC_MODELS_API_URL as string | undefined;
-  if (url) {
-    try {
-      const res = await fetch(url, { headers: { accept: 'application/json' } });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const catalog = normalizeCatalog(await res.json(), false);
-      if (catalog.models.length === 0) throw new Error('empty catalog');
-      return catalog;
-    } catch (err) {
-      console.warn(`[catalog] Could not load ${url} (${(err as Error).message}); using bundled sample data.`);
-    }
+  const url = (import.meta.env.PUBLIC_MODELS_API_URL ?? '').trim();
+  if (!url) return fromSample();
+  return fromLive(url);
+}
+
+function fromSample(): Catalog {
+  const confirmed = (sample as { sample?: unknown }).sample === false;
+  const { catalog, errors, warnings } = parseCatalog(sample, confirmed ? 'live' : 'sample');
+  warnings.forEach((w) => console.warn(`[catalog] sample: ${w}`));
+  if (errors.length) throw new Error(`[catalog] The bundled sample catalog is invalid:\n- ${errors.join('\n- ')}`);
+  return catalog;
+}
+
+async function fromLive(url: string): Promise<Catalog> {
+  const fail = (reason: string): never => {
+    throw new Error(
+      `[catalog] PUBLIC_MODELS_API_URL is set but the live catalog could not be used: ${reason}\n` +
+        'The build stops here rather than publishing sample prices as if they were live. ' +
+        'Fix the endpoint, or unset PUBLIC_MODELS_API_URL to build the clearly labelled sample catalog.',
+    );
+  };
+
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(url);
+  } catch {
+    return fail(`"${url}" is not a valid URL.`);
   }
-  return normalizeCatalog(sample as Raw, true);
-}
+  if (parsedUrl.protocol !== 'https:') fail('the URL must use https.');
 
-/* ------------------------------------------------------------------ */
-/* Formatting                                                          */
-/* ------------------------------------------------------------------ */
+  let body: unknown;
+  try {
+    const res = await fetch(parsedUrl, {
+      headers: { accept: 'application/json' },
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      redirect: 'error',
+    });
+    if (!res.ok) fail(`HTTP ${res.status} ${res.statusText}.`);
+    const type = res.headers.get('content-type') ?? '';
+    if (!type.includes('json')) fail(`expected JSON, got "${type || 'no content type'}".`);
+    const text = await res.text();
+    if (text.length > MAX_BYTES) fail(`response is larger than ${MAX_BYTES} bytes.`);
+    body = JSON.parse(text);
+  } catch (err) {
+    if ((err as Error).message.startsWith('[catalog]')) throw err;
+    return fail((err as Error).message);
+  }
 
-const needsThirdDecimal = (v: number) => Math.round(v * 1000) % 10 !== 0;
-
-/** Price per 1M tokens, e.g. $2.00, $0.075 */
-export function formatRate(value: number | null): string {
-  if (value === null) return '—';
-  return `$${value.toFixed(needsThirdDecimal(value) ? 3 : 2)}`;
-}
-
-/** Compact token count, e.g. 1M, 262K */
-export function formatTokens(value: number | null): string {
-  if (value === null) return '—';
-  if (value >= 1_000_000) return `${+(value / 1_000_000).toFixed(1)}M`;
-  if (value >= 1_000) return `${Math.round(value / 1_000)}K`;
-  return String(value);
-}
-
-export function cheapestInput(models: Model[]): number {
-  return Math.min(...models.map((m) => m.pricing.input));
+  const { catalog, errors, warnings } = parseCatalog(body, 'live');
+  warnings.forEach((w) => console.warn(`[catalog] live: ${w}`));
+  if (errors.length) fail(`validation failed:\n- ${errors.join('\n- ')}`);
+  return catalog;
 }
