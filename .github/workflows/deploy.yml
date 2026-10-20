@@ -1,0 +1,60 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  # Run manually from the Actions tab
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Type-check
+        run: npm run check
+        env:
+          PUBLIC_BRAND_NAME: ${{ secrets.BRAND_NAME }}
+          SITE_URL: ${{ secrets.SITE_URL }}
+
+      - name: Build
+        run: npm run build
+        env:
+          # Kept as secrets so the values are not stored in the repository and
+          # are masked in the public workflow logs.
+          PUBLIC_BRAND_NAME: ${{ secrets.BRAND_NAME }}
+          SITE_URL: ${{ secrets.SITE_URL }}
+          PUBLIC_CONTACT_EMAIL: ${{ secrets.CONTACT_EMAIL }}
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

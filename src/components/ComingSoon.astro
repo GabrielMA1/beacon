@@ -1,0 +1,199 @@
+---
+import Logo from './Logo.astro';
+import { brand } from '../config';
+
+const year = new Date().getFullYear();
+---
+<div class="cs">
+  <header class="wrap cs__top">
+    <a href="/" class="cs__brand" aria-label={`${brand.name} home`}><Logo title="" /></a>
+    <p class="cs__status"><span class="cs__pulse" aria-hidden="true"></span>Coming soon</p>
+  </header>
+
+  <main id="main" class="wrap cs__main">
+    <h1 class="cs__title">Your <span class="nowrap">go-to</span> place for tokens.</h1>
+    <p class="cs__promise">
+      <span>Same intelligent AI models.</span>
+      <strong>Cheaper API.</strong>
+    </p>
+    <p class="cs__note">
+      {brand.name} is being built right now: one API and one prepaid token balance for leading AI models.
+    </p>
+    {brand.email && (
+      <p class="cs__contact">
+        Want to hear first? <a href={`mailto:${brand.email}`}>{brand.email}</a>
+      </p>
+    )}
+  </main>
+
+  <footer class="wrap cs__foot">
+    <p>© {year} {brand.name}</p>
+  </footer>
+
+  <div class="cs__node" aria-hidden="true"></div>
+</div>
+
+<style>
+  .cs {
+    position: relative;
+    display: grid;
+    grid-template-rows: auto 1fr auto;
+    min-height: 100svh;
+    overflow: hidden;
+    isolation: isolate;
+  }
+
+  .cs__top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding-block: 1.5rem;
+  }
+
+  .cs__brand {
+    display: inline-flex;
+    color: var(--ink);
+  }
+
+  .cs__brand :global(.logo) {
+    height: clamp(1.6rem, 1.3rem + 0.8vw, 2.1rem);
+  }
+
+  .cs__status {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.45rem 0.9rem;
+    border: 1px solid var(--ink);
+    font-size: var(--fs-small);
+    font-weight: 560;
+  }
+
+  .cs__pulse {
+    position: relative;
+    width: 0.55rem;
+    height: 0.55rem;
+    border-radius: 50%;
+    background: var(--signal);
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .cs__pulse::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: 50%;
+      background: var(--signal);
+      animation: pulse 2.4s var(--ease) infinite;
+    }
+    @keyframes pulse {
+      from {
+        transform: scale(1);
+        opacity: 0.6;
+      }
+      to {
+        transform: scale(3.2);
+        opacity: 0;
+      }
+    }
+  }
+
+  .cs__main {
+    display: grid;
+    align-content: center;
+    gap: clamp(1.25rem, 0.8rem + 1.5vw, 2rem);
+    padding-block: clamp(3rem, 2rem + 6vh, 7rem);
+  }
+
+  .cs__title {
+    max-width: 9.5em;
+    font-size: clamp(3rem, 1rem + 8.4vw, 8.75rem);
+    font-weight: 640;
+    line-height: 0.92;
+    letter-spacing: -0.045em;
+    text-wrap: balance;
+  }
+
+  .nowrap {
+    white-space: nowrap;
+  }
+
+  .cs__promise {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 0.35em;
+    max-width: 22em;
+    font-size: clamp(1.5rem, 1.1rem + 1.7vw, 2.75rem);
+    font-weight: 500;
+    line-height: 1.15;
+    letter-spacing: -0.025em;
+    color: var(--ink-2);
+  }
+
+  .cs__promise strong {
+    font-weight: 640;
+    color: var(--ink);
+  }
+
+  .cs__note {
+    max-width: 30em;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--ink);
+    font-size: var(--fs-lede);
+    line-height: 1.5;
+    color: var(--ink-2);
+  }
+
+  .cs__contact {
+    color: var(--ink-2);
+  }
+
+  .cs__contact a {
+    color: var(--ink);
+    font-weight: 560;
+    text-decoration-color: var(--rule);
+    text-underline-offset: 0.25em;
+  }
+
+  .cs__contact a:hover {
+    text-decoration-color: currentColor;
+  }
+
+  .cs__foot {
+    padding-block: 1.5rem;
+    font-size: var(--fs-micro);
+    color: var(--ink-3);
+  }
+
+  /* The brand node, large and cropped by the page edge. */
+  .cs__node {
+    position: absolute;
+    z-index: -1;
+    right: -14vmin;
+    bottom: -14vmin;
+    width: 52vmin;
+    aspect-ratio: 1;
+    border-radius: 50%;
+    background: var(--signal);
+  }
+
+  @media (max-width: 720px) {
+    .cs__node {
+      width: 46vmin;
+      right: -16vmin;
+      bottom: -16vmin;
+    }
+    .cs__note {
+      max-width: none;
+    }
+  }
+
+  @media (min-width: 1100px) {
+    .cs__note,
+    .cs__promise,
+    .cs__contact {
+      margin-left: 0.1em;
+    }
+  }
+</style>
